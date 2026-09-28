@@ -28,6 +28,7 @@ struct ComposeView: View {
                 videoSection
                 placeSection
                 climbSection
+                gradeSection
                 Section("Description") {
                     TextField("How did it go? Beta, beta spray, celebrations…", text: $draft.caption, axis: .vertical)
                         .lineLimit(3...8)
@@ -54,8 +55,10 @@ struct ComposeView: View {
                 loadVideo(from: item)
             }
             .onChange(of: draft.discipline) { _, discipline in
-                if !discipline.gradeSystems.contains(draft.grade.system) {
-                    draft.grade = .defaultGrade(for: discipline)
+                if !discipline.gradeSystems.contains(draft.gradeSystem) {
+                    draft.gradeSystem = discipline.defaultGradeSystem
+                    draft.grade = nil
+                    draft.proposedGrade = nil
                 }
             }
             .onChange(of: draft.videoURL) { _, url in
@@ -150,30 +153,40 @@ struct ComposeView: View {
                 ForEach(ClimbDiscipline.allCases) { Text($0.displayName).tag($0) }
             }
 
-            if draft.discipline.gradeSystems.count > 1 {
-                Picker("Grade system", selection: gradeSystemBinding) {
-                    ForEach(draft.discipline.gradeSystems) { Text($0.displayName).tag($0) }
-                }
-                .pickerStyle(.segmented)
-            }
-
-            Picker("Grade", selection: $draft.grade.value) {
-                ForEach(draft.grade.system.grades, id: \.self) { Text($0).tag($0) }
-            }
-
             Picker("Style", selection: $draft.sendStyle) {
                 ForEach(SendStyle.allCases) { Label($0.displayName, systemImage: $0.symbolName).tag($0) }
             }
         }
     }
 
-    /// Switching systems resets the grade to the middle of the new scale.
+    /// Both grades are optional: the official grade (from the gym/guidebook) and
+    /// the poster's proposed grade ("feels like").
+    private var gradeSection: some View {
+        Section {
+            if draft.discipline.gradeSystems.count > 1 {
+                Picker("Scale", selection: gradeSystemBinding) {
+                    ForEach(draft.discipline.gradeSystems) { Text($0.displayName).tag($0) }
+                }
+                .pickerStyle(.segmented)
+            }
+
+            OptionalGradePicker(title: "Grade", system: draft.gradeSystem, grade: $draft.grade)
+            OptionalGradePicker(title: "Proposed grade", system: draft.gradeSystem, grade: $draft.proposedGrade)
+        } header: {
+            Text("Grade")
+        } footer: {
+            Text("Grade is the official grade from the gym or guidebook. Proposed grade is what you think it really is. Both are optional.")
+        }
+    }
+
+    /// Switching scales converts nothing; it just clears grades from the old scale.
     private var gradeSystemBinding: Binding<GradeSystem> {
         Binding {
-            draft.grade.system
+            draft.gradeSystem
         } set: { system in
-            let grades = system.grades
-            draft.grade = Grade(system: system, value: grades[grades.count / 3])
+            draft.gradeSystem = system
+            if draft.grade?.system != system { draft.grade = nil }
+            if draft.proposedGrade?.system != system { draft.proposedGrade = nil }
         }
     }
 
@@ -203,6 +216,23 @@ struct ComposeView: View {
             } else {
                 errorMessage = store.lastError ?? "Something went wrong."
             }
+        }
+    }
+}
+
+/// A grade that can be left blank: "Not set" or a value on the given scale.
+private struct OptionalGradePicker: View {
+    let title: String
+    let system: GradeSystem
+    @Binding var grade: Grade?
+
+    var body: some View {
+        Picker(title, selection: Binding(
+            get: { grade?.value },
+            set: { value in grade = value.map { Grade(system: system, value: $0) } }
+        )) {
+            Text("Not set").tag(String?.none)
+            ForEach(system.grades, id: \.self) { Text($0).tag(String?.some($0)) }
         }
     }
 }

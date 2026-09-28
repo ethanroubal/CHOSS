@@ -7,18 +7,14 @@ struct PostCardView: View {
     var reason: FeedReason? = nil
 
     @State private var showingComments = false
+    @State private var showingShare = false
 
     private var author: User? { store.user(post.authorID) }
     private var place: Place? { store.place(post.placeID) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if case .followedPlace(let placeID) = reason, let followed = store.place(placeID) {
-                Label("Because you follow \(followed.name)", systemImage: followed.kind.symbolName)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal)
-            }
+            reasonLabel
 
             header
             SendVideoPlayer(post: post)
@@ -32,6 +28,33 @@ struct PostCardView: View {
         .sheet(isPresented: $showingComments) {
             CommentsView(postID: post.id)
                 .presentationDetents([.medium, .large])
+        }
+        .sheet(isPresented: $showingShare) {
+            ShareToFollowersView(post: post)
+                .presentationDetents([.medium, .large])
+        }
+    }
+
+    @ViewBuilder
+    private var reasonLabel: some View {
+        switch reason {
+        case .followedPlace(let placeID):
+            if let followed = store.place(placeID) {
+                Label("Because you follow \(followed.name)", systemImage: followed.kind.symbolName)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal)
+            }
+        case .repostedBy(let userID):
+            NavigationLink(value: Route.user(userID)) {
+                Label("\(store.user(userID)?.username ?? "Someone") reposted", systemImage: "arrow.2.squarepath")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal)
+        default:
+            EmptyView()
         }
     }
 
@@ -76,9 +99,22 @@ struct PostCardView: View {
             } label: {
                 Image(systemName: "bubble.right")
             }
-            if let url = post.videoURL {
-                ShareLink(item: url) { Image(systemName: "paperplane") }
+            if store.canRepost(post) {
+                Button {
+                    store.toggleRepost(post.id)
+                } label: {
+                    Image(systemName: "arrow.2.squarepath")
+                        .foregroundStyle(store.isReposted(post.id) ? Color.green : Color.primary)
+                        .symbolEffect(.bounce, value: store.isReposted(post.id))
+                }
+                .accessibilityLabel(store.isReposted(post.id) ? "Undo repost" : "Repost")
             }
+            Button {
+                showingShare = true
+            } label: {
+                Image(systemName: "paperplane")
+            }
+            .accessibilityLabel("Send to a friend")
             Spacer()
             Label(post.sendStyle.displayName, systemImage: post.sendStyle.symbolName)
                 .font(.caption.bold())
@@ -91,18 +127,33 @@ struct PostCardView: View {
 
     private var details: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if !post.likedBy.isEmpty {
-                Text("\(post.likedBy.count) \(post.likedBy.count == 1 ? "like" : "likes")")
+            let counts = [
+                countText(post.likedBy.count, "like", "likes"),
+                countText(store.repostCount(post.id), "repost", "reposts"),
+            ].compactMap { $0 }
+            if !counts.isEmpty {
+                Text(counts.joined(separator: " · "))
                     .font(.subheadline.bold())
             }
 
             HStack(spacing: 8) {
-                GradeBadge(grade: post.grade)
+                if let grade = post.grade {
+                    GradeBadge(grade: grade)
+                }
                 Text(post.routeName.isEmpty ? "Unnamed route" : post.routeName)
                     .font(.subheadline.bold())
                 Text("· \(post.discipline.displayName)")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+            }
+
+            if let proposed = post.proposedGrade {
+                HStack(spacing: 6) {
+                    GradeBadge(grade: proposed, isProposed: true)
+                    Text("Proposed grade")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             if !post.caption.isEmpty {
@@ -118,6 +169,10 @@ struct PostCardView: View {
             }
         }
         .padding(.horizontal)
+    }
+
+    private func countText(_ count: Int, _ singular: String, _ plural: String) -> String? {
+        count == 0 ? nil : "\(count) \(count == 1 ? singular : plural)"
     }
 }
 
@@ -152,8 +207,9 @@ struct PostGrid: View {
                         .aspectRatio(4 / 5, contentMode: .fit)
                         .overlay { VideoThumbnailView(post: post) }
                         .clipped()
-                        .overlay(alignment: .bottomLeading) {
-                            GradeBadge(grade: post.grade).padding(4)
+                        // Grade in the corner, only when the poster set one.
+                        .overlay(alignment: .topTrailing) {
+                            PostGradeBadge(post: post).padding(5)
                         }
                 }
                 .buttonStyle(.plain)

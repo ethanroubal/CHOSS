@@ -67,7 +67,7 @@ private struct SendRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
                     Text(post.routeName.isEmpty ? "Unnamed route" : post.routeName).font(.headline).lineLimit(1)
-                    GradeBadge(grade: post.grade)
+                    PostGradeBadge(post: post)
                 }
                 Text([store.user(post.authorID)?.username, store.place(post.placeID)?.name]
                         .compactMap { $0 }

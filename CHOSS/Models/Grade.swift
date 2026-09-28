@@ -79,9 +79,26 @@ struct Grade: Codable, Hashable {
     var rank: Int { system.grades.firstIndex(of: value) ?? -1 }
 
     static func defaultGrade(for discipline: ClimbDiscipline) -> Grade {
-        let system = discipline.defaultGradeSystem
-        let value = system == .vScale ? "V3" : "5.10a"
-        return Grade(system: system, value: value)
+        defaultGrade(in: discipline.defaultGradeSystem)
+    }
+
+    /// A reasonable starting point for pickers (roughly a third of the way up the scale).
+    static func defaultGrade(in system: GradeSystem) -> Grade {
+        let grades = system.grades
+        return Grade(system: system, value: grades[grades.count / 3])
+    }
+}
+
+/// A climber's self-reported ability, e.g. "V4–V6" or just "5.11a".
+struct GradeRange: Codable, Hashable {
+    var system: GradeSystem
+    var low: String
+    /// nil (or equal to `low`) means a single grade rather than a range.
+    var high: String?
+
+    var display: String {
+        guard let high, high != low else { return low }
+        return "\(low)–\(high)"
     }
 }
 

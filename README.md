@@ -11,8 +11,11 @@ shows up in your feed. You can follow individual climbers too, Instagram-style.
 - **Search:** places, climbers, and sends (by route name, grade, place or caption).
 - **Profile:** stats, hardest grades, a grid of sends, and followed places.
 - **Place page:** follow button, follower/send/climber counts, map, sends at this place, and a *Post a send* button.
-- **Post a send:** pick or record a video, tag a gym or crag, choose discipline and grade (V-scale, Font, YDS, French), pick the send style (onsight/flash/send/repeat), and add a description. Untagged posts only reach your followers.
-- **Engagement:** likes (including double-tap on the video), comments, and sharing.
+- **Post a send:** pick or record a video, tag a gym or crag, choose discipline and send style (onsight/flash/send/repeat), and add a description. Two optional grades (V-scale, Font, YDS or French): the official **Grade** and your **Proposed Grade** ("feels like"). Untagged posts only reach your followers.
+- **Engagement:** likes (including double-tap on the video), comments (swipe to delete your own), and reposts. Reposts show up in your followers' feeds as "X reposted" and on a Reposts tab on your profile.
+- **Direct messages:** the paper-plane button on a post opens *Send to*, which searches the people you follow with forgiving name matching (prefixes, initials, typos like "priay" → Priya). Pick one or more people, add a note, and send. The Messages inbox is the paper plane on Home.
+- **Climber grade:** set a bouldering and/or rope grade or grade range (e.g. V4–V6, 5.11b–5.11d) in profile setup or *Edit profile*. You choose whether it shows on your profile.
+- **Grades on thumbnails:** profile and Explore grids show each video's grade in the corner. The official grade is a filled pill and a proposed grade is an outlined "~V6". Nothing shows if neither was set.
 - **Add a place:** users can add a missing gym or crag. It stays marked unverified until reviewed (see [docs/PLACES_DATA_STRATEGY.md](docs/PLACES_DATA_STRATEGY.md)).
 
 ## Running it
@@ -21,7 +24,7 @@ Requires **Xcode 16+** and iOS 17+.
 
 1. Open `CHOSS.xcodeproj`.
 2. Choose your team under *Signing & Capabilities* (or just run on a simulator).
-3. Run. The app starts with sample data. Use the people icon on the Profile tab to switch between demo accounts and see the feed from different climbers' points of view.
+3. Run. The app starts with sample data. Use the people icon on the Profile tab to switch between demo accounts, or choose *Create new account…* to go through profile setup.
 
 The project uses Xcode's synchronized folders, so any file you add under `CHOSS/` is compiled automatically.
 

@@ -17,18 +17,14 @@ struct CommentsView: View {
                             .listRowSeparator(.hidden)
                     }
                     ForEach(post.comments) { comment in
-                        HStack(alignment: .top, spacing: 10) {
-                            AvatarView(user: store.user(comment.authorID), size: 32)
-                            VStack(alignment: .leading, spacing: 2) {
-                                HStack {
-                                    Text(store.user(comment.authorID)?.username ?? "unknown").bold()
-                                    Text(comment.createdAt, format: .relative(presentation: .named))
-                                        .foregroundStyle(.secondary)
+                        commentRow(comment)
+                            .swipeActions {
+                                if comment.authorID == store.currentUserID {
+                                    Button("Delete", systemImage: "trash", role: .destructive) {
+                                        store.deleteComment(comment.id, from: postID)
+                                    }
                                 }
-                                .font(.caption)
-                                Text(comment.text).font(.subheadline)
                             }
-                        }
                     }
                 }
             }
@@ -50,6 +46,21 @@ struct CommentsView: View {
                 }
                 .padding()
                 .background(.bar)
+            }
+        }
+    }
+
+    private func commentRow(_ comment: Comment) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            AvatarView(user: store.user(comment.authorID), size: 32)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack {
+                    Text(store.user(comment.authorID)?.username ?? "unknown").bold()
+                    Text(comment.createdAt, format: .relative(presentation: .named))
+                        .foregroundStyle(.secondary)
+                }
+                .font(.caption)
+                Text(comment.text).font(.subheadline)
             }
         }
     }

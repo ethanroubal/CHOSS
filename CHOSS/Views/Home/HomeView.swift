@@ -35,6 +35,16 @@ struct HomeView: View {
             }
             .refreshable { await store.load() }
             .navigationTitle("CHOSS")
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    NavigationLink {
+                        InboxView()
+                    } label: {
+                        Image(systemName: "paperplane")
+                    }
+                    .accessibilityLabel("Messages")
+                }
+            }
             .withAppRoutes()
         }
     }

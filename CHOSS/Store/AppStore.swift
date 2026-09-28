@@ -5,12 +5,15 @@ import Observation
 enum FeedReason: Hashable {
     case followedPlace(Place.ID)
     case followedUser
+    case repostedBy(User.ID)
     case own
 }
 
 struct FeedItem: Identifiable {
     let post: Post
     let reason: FeedReason
+    /// When it entered the feed: the post date, or the repost date for reposts.
+    let date: Date
     var id: Post.ID { post.id }
 }
 
@@ -39,6 +42,9 @@ final class AppStore {
     private(set) var posts: [Post] = []
     private(set) var followedPlaces: [User.ID: Set<Place.ID>] = [:]
     private(set) var followedUsers: [User.ID: Set<User.ID>] = [:]
+    private(set) var reposts: [Repost] = []
+    private(set) var conversations: [Conversation] = []
+    private(set) var messages: [Message] = []
 
     init(repository: ClimbingRepository = MockClimbingRepository(),
          currentUserID: User.ID = SampleData.currentUserID) {
@@ -70,6 +76,9 @@ final class AppStore {
         posts = snapshot.posts.sorted { $0.createdAt > $1.createdAt }
         followedPlaces = snapshot.followedPlaces
         followedUsers = snapshot.followedUsers
+        reposts = snapshot.reposts
+        conversations = snapshot.conversations
+        messages = snapshot.messages.sorted { $0.createdAt < $1.createdAt }
         isLoaded = true
     }
 
@@ -97,12 +106,14 @@ final class AppStore {
 
     // MARK: - Feeds
 
-    /// The home feed: sends posted to places you follow, plus posts from climbers you follow.
+    /// The home feed: sends posted to places you follow, posts from climbers you follow,
+    /// and posts those climbers reposted. Each post appears once.
     func homeFeed(filter: HomeFeedFilter) -> [FeedItem] {
         let myPlaces = followedPlaces[currentUserID] ?? []
         let myPeople = followedUsers[currentUserID] ?? []
 
-        return posts.compactMap { post in
+        var items: [Post.ID: FeedItem] = [:]
+        for post in posts {
             let reason: FeedReason?
             if post.authorID == currentUserID {
                 reason = filter == .places ? nil : .own
@@ -113,8 +124,23 @@ final class AppStore {
             } else {
                 reason = nil
             }
-            return reason.map { FeedItem(post: post, reason: $0) }
+            if let reason {
+                items[post.id] = FeedItem(post: post, reason: reason, date: post.createdAt)
+            }
         }
+
+        if filter != .places {
+            // A post already in the feed keeps its original reason; among reposts, the newest wins.
+            for repost in reposts where myPeople.contains(repost.userID) {
+                guard let post = self.post(repost.postID) else { continue }
+                if let existing = items[post.id] {
+                    guard case .repostedBy = existing.reason, repost.createdAt > existing.date else { continue }
+                }
+                items[post.id] = FeedItem(post: post, reason: .repostedBy(repost.userID), date: repost.createdAt)
+            }
+        }
+
+        return items.values.sorted { $0.date > $1.date }
     }
 
     func posts(at placeID: Place.ID) -> [Post] {
@@ -123,6 +149,14 @@ final class AppStore {
 
     func posts(by userID: User.ID) -> [Post] {
         posts.filter { $0.authorID == userID }
+    }
+
+    /// Posts a user has reposted, most recent repost first.
+    func repostedPosts(by userID: User.ID) -> [Post] {
+        reposts
+            .filter { $0.userID == userID }
+            .sorted { $0.createdAt > $1.createdAt }
+            .compactMap { post($0.postID) }
     }
 
     /// Most-liked recent sends for Explore.
@@ -158,6 +192,11 @@ final class AppStore {
 
     func followingCount(ofUser userID: User.ID) -> Int {
         followedUsers[userID]?.count ?? 0
+    }
+
+    /// Climbers `userID` follows, alphabetically.
+    func followedUsers(of userID: User.ID) -> [User] {
+        (followedUsers[userID] ?? []).compactMap { users[$0] }.sorted { $0.displayName < $1.displayName }
     }
 
     func followedPlaces(of userID: User.ID) -> [Place] {
@@ -221,6 +260,138 @@ final class AppStore {
         }
     }
 
+    func deleteComment(_ commentID: Comment.ID, from postID: Post.ID) {
+        guard let index = posts.firstIndex(where: { $0.id == postID }),
+              posts[index].comments.contains(where: { $0.id == commentID && $0.authorID == currentUserID })
+        else { return }
+        posts[index].comments.removeAll { $0.id == commentID }
+        perform { [repository] in
+            try await repository.deleteComment(commentID, from: postID)
+        }
+    }
+
+    // MARK: - Reposts
+
+    func isReposted(_ postID: Post.ID) -> Bool {
+        reposts.contains { $0.postID == postID && $0.userID == currentUserID }
+    }
+
+    func repostCount(_ postID: Post.ID) -> Int {
+        reposts.filter { $0.postID == postID }.count
+    }
+
+    /// Reposting your own post isn't allowed (same as Instagram).
+    func canRepost(_ post: Post) -> Bool { post.authorID != currentUserID }
+
+    func toggleRepost(_ postID: Post.ID) {
+        guard let post = post(postID), canRepost(post) else { return }
+        let me = currentUserID
+        if isReposted(postID) {
+            reposts.removeAll { $0.postID == postID && $0.userID == me }
+            perform { [repository] in
+                try await repository.removeRepost(postID: postID, by: me)
+            }
+        } else {
+            let repost = Repost(id: UUID().uuidString, userID: me, postID: postID, createdAt: .now)
+            reposts.append(repost)
+            perform { [repository] in
+                try await repository.addRepost(repost)
+            }
+        }
+    }
+
+    // MARK: - Direct messages
+
+    /// The current user's threads, most recently active first.
+    var myConversations: [Conversation] {
+        conversations
+            .filter { $0.participantIDs.contains(currentUserID) }
+            .sorted { (lastMessage(in: $0.id)?.createdAt ?? .distantPast) > (lastMessage(in: $1.id)?.createdAt ?? .distantPast) }
+    }
+
+    func messages(in conversationID: Conversation.ID) -> [Message] {
+        messages.filter { $0.conversationID == conversationID }
+    }
+
+    func lastMessage(in conversationID: Conversation.ID) -> Message? {
+        messages.last { $0.conversationID == conversationID }
+    }
+
+    /// The other people in a thread (everyone but the current user).
+    func otherParticipants(in conversation: Conversation) -> [User] {
+        conversation.participantIDs.subtracting([currentUserID]).compactMap { users[$0] }
+    }
+
+    /// Finds the 1:1 thread with `userID`, creating it if needed.
+    @discardableResult
+    func directConversation(with userID: User.ID) -> Conversation {
+        let participants: Set<User.ID> = [currentUserID, userID]
+        if let existing = conversations.first(where: { $0.participantIDs == participants }) {
+            return existing
+        }
+        let conversation = Conversation(id: UUID().uuidString, participantIDs: participants)
+        conversations.append(conversation)
+        perform { [repository] in
+            try await repository.saveConversation(conversation)
+        }
+        return conversation
+    }
+
+    func sendMessage(_ text: String, sharing postID: Post.ID? = nil, in conversationID: Conversation.ID) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty || postID != nil else { return }
+        let message = Message(id: UUID().uuidString, conversationID: conversationID, senderID: currentUserID,
+                              text: trimmed, sharedPostID: postID, createdAt: .now)
+        messages.append(message)
+        perform { [repository] in
+            try await repository.sendMessage(message)
+        }
+    }
+
+    /// Sends a post to each recipient in their own 1:1 thread, with an optional note.
+    func share(_ postID: Post.ID, with recipientIDs: Set<User.ID>, note: String) {
+        for recipient in recipientIDs {
+            let conversation = directConversation(with: recipient)
+            sendMessage(note, sharing: postID, in: conversation.id)
+        }
+    }
+
+    // MARK: - Profiles
+
+    func isUsernameAvailable(_ username: String, excluding userID: User.ID? = nil) -> Bool {
+        let wanted = username.lowercased()
+        return !users.values.contains { $0.username.lowercased() == wanted && $0.id != userID }
+    }
+
+    /// Saves edits to the current user's profile.
+    func updateProfile(_ user: User) {
+        guard user.id == currentUserID else { return }
+        users[user.id] = user
+        perform { [repository] in
+            try await repository.saveUser(user)
+        }
+    }
+
+    /// Profile setup for a new account; signs in as the new user.
+    func createAccount(_ user: User) async -> Bool {
+        guard isUsernameAvailable(user.username) else {
+            lastError = "That username is taken."
+            return false
+        }
+        do {
+            try await repository.saveUser(user)
+            users[user.id] = user
+            currentUserID = user.id
+            if let home = user.homePlaceID, !isFollowing(place: home) {
+                toggleFollow(place: home)
+            }
+            return true
+        } catch {
+            lastError = error.localizedDescription
+            return false
+        }
+    }
+
     // MARK: - Creating content
 
     @discardableResult
@@ -234,6 +405,7 @@ final class AppStore {
             routeName: draft.routeName.trimmingCharacters(in: .whitespacesAndNewlines),
             discipline: draft.discipline,
             grade: draft.grade,
+            proposedGrade: draft.proposedGrade,
             sendStyle: draft.sendStyle,
             caption: draft.caption.trimmingCharacters(in: .whitespacesAndNewlines),
             createdAt: .now
@@ -285,16 +457,17 @@ final class AppStore {
         return posts.filter { post in
             post.routeName.localizedCaseInsensitiveContains(q)
                 || post.caption.localizedCaseInsensitiveContains(q)
-                || post.grade.value.localizedCaseInsensitiveContains(q)
+                || (post.grade?.value.localizedCaseInsensitiveContains(q) ?? false)
+                || (post.proposedGrade?.value.localizedCaseInsensitiveContains(q) ?? false)
                 || (place(post.placeID)?.name.localizedCaseInsensitiveContains(q) ?? false)
         }
     }
 
     // MARK: - Stats
 
-    /// Hardest send per grading system, e.g. [V7, 5.12a].
+    /// Hardest send per grading system, e.g. [V7, 5.12a]. Uses the proposed grade when there's no official one.
     func hardestGrades(for userID: User.ID) -> [Grade] {
-        let grouped = Dictionary(grouping: posts(by: userID).map(\.grade), by: \.system)
+        let grouped = Dictionary(grouping: posts(by: userID).compactMap(\.effectiveGrade), by: \.system)
         return GradeSystem.allCases.compactMap { system in
             grouped[system]?.max { $0.rank < $1.rank }
         }

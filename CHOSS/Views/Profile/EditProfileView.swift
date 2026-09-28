@@ -1,0 +1,226 @@
+import SwiftUI
+
+/// Used both for first-time profile setup and for editing later.
+struct EditProfileView: View {
+    enum Mode {
+        case setup
+        case edit
+    }
+
+    @Environment(AppStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+
+    let mode: Mode
+    @State private var user: User
+    @State private var isSaving = false
+    @State private var error: String?
+
+    /// Edit an existing profile.
+    init(user: User) {
+        mode = .edit
+        _user = State(initialValue: user)
+    }
+
+    /// Set up a brand-new profile.
+    init() {
+        mode = .setup
+        _user = State(initialValue: User(id: "u_\(UUID().uuidString)", username: "", displayName: "",
+                                         bio: "", homePlaceID: nil))
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    HStack {
+                        Spacer()
+                        AvatarView(user: user, size: 84)
+                        Spacer()
+                    }
+                    .listRowBackground(Color.clear)
+                }
+
+                Section("Profile") {
+                    TextField("Name", text: $user.displayName)
+                        .textContentType(.name)
+                    TextField("Username", text: $user.username)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .textContentType(.username)
+                    TextField("Bio", text: $user.bio, axis: .vertical)
+                        .lineLimit(2...4)
+                    Picker("Home gym / crag", selection: $user.homePlaceID) {
+                        Text("None").tag(Place.ID?.none)
+                        ForEach(store.allPlaces) { place in
+                            Text(place.name).tag(Place.ID?.some(place.id))
+                        }
+                    }
+                }
+
+                GradeRangeSection(
+                    title: "Bouldering grade",
+                    systems: ClimbDiscipline.boulder.gradeSystems,
+                    range: $user.boulderRange
+                )
+                GradeRangeSection(
+                    title: "Rope grade",
+                    systems: ClimbDiscipline.sport.gradeSystems,
+                    range: $user.ropeRange
+                )
+
+                Section {
+                    Toggle("Show my grade on my profile", isOn: $user.showsGradeRange)
+                } footer: {
+                    Text("Your grade tells people what kind of climber you are. Hide it any time; it's still used to suggest climbs and places.")
+                }
+            }
+            .navigationTitle(mode == .setup ? "Set up your profile" : "Edit profile")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(mode == .setup ? "Create" : "Save", action: save)
+                        .bold()
+                        .disabled(!isValid || isSaving)
+                }
+            }
+            .alert("Couldn't save", isPresented: Binding(
+                get: { error != nil },
+                set: { if !$0 { error = nil } }
+            )) {
+                Button("OK") { error = nil }
+            } message: {
+                Text(error ?? "")
+            }
+        }
+    }
+
+    private var cleanUsername: String {
+        user.username.trimmingCharacters(in: .whitespaces).lowercased()
+    }
+
+    private var isValid: Bool {
+        !user.displayName.trimmingCharacters(in: .whitespaces).isEmpty
+            && cleanUsername.count >= 3
+            && cleanUsername.allSatisfy { $0.isLetter || $0.isNumber || $0 == "_" || $0 == "." }
+    }
+
+    private func save() {
+        var saved = user
+        saved.username = cleanUsername
+        saved.displayName = user.displayName.trimmingCharacters(in: .whitespaces)
+        guard store.isUsernameAvailable(saved.username, excluding: saved.id) else {
+            error = "@\(saved.username) is taken. Try another username."
+            return
+        }
+        switch mode {
+        case .edit:
+            store.updateProfile(saved)
+            dismiss()
+        case .setup:
+            isSaving = true
+            Task {
+                if await store.createAccount(saved) {
+                    dismiss()
+                } else {
+                    error = store.lastError ?? "Something went wrong."
+                }
+                isSaving = false
+            }
+        }
+    }
+}
+
+/// Optional grade or grade range: off, a single grade, or low–high.
+private struct GradeRangeSection: View {
+    let title: String
+    let systems: [GradeSystem]
+    @Binding var range: GradeRange?
+
+    var body: some View {
+        Section(title) {
+            Toggle("Add \(title.lowercased())", isOn: Binding(
+                get: { range != nil },
+                set: { enabled in
+                    if enabled {
+                        let start = Grade.defaultGrade(in: systems[0]).value
+                        range = GradeRange(system: systems[0], low: start, high: nil)
+                    } else {
+                        range = nil
+                    }
+                }
+            ))
+
+            if let current = range {
+                Picker("Scale", selection: systemBinding(current)) {
+                    ForEach(systems) { Text($0.displayName).tag($0) }
+                }
+                .pickerStyle(.segmented)
+
+                Toggle("It's a range", isOn: Binding(
+                    get: { current.high != nil },
+                    set: { isRange in
+                        range?.high = isRange ? nextGrade(after: current.low, in: current.system) : nil
+                    }
+                ))
+
+                Picker(current.high == nil ? "Grade" : "From", selection: Binding(
+                    get: { current.low },
+                    set: { newLow in
+                        range?.low = newLow
+                        // Keep low ≤ high.
+                        if let high = range?.high, rank(high, current.system) < rank(newLow, current.system) {
+                            range?.high = newLow
+                        }
+                    }
+                )) {
+                    ForEach(current.system.grades, id: \.self) { Text($0).tag($0) }
+                }
+
+                if let high = current.high {
+                    Picker("To", selection: Binding(
+                        get: { high },
+                        set: { range?.high = $0 }
+                    )) {
+                        ForEach(current.system.grades.filter { rank($0, current.system) >= rank(current.low, current.system) },
+                                id: \.self) { Text($0).tag($0) }
+                    }
+                }
+
+                LabeledContent("Shows as", value: current.display)
+            }
+        }
+    }
+
+    private func rank(_ grade: String, _ system: GradeSystem) -> Int {
+        system.grades.firstIndex(of: grade) ?? 0
+    }
+
+    private func nextGrade(after grade: String, in system: GradeSystem) -> String {
+        let grades = system.grades
+        let index = min(rank(grade, system) + 1, grades.count - 1)
+        return grades[index]
+    }
+
+    /// Changing the scale resets the grades to that scale's default.
+    private func systemBinding(_ current: GradeRange) -> Binding<GradeSystem> {
+        Binding(
+            get: { current.system },
+            set: { system in
+                let start = Grade.defaultGrade(in: system).value
+                range = GradeRange(system: system, low: start,
+                                   high: current.high == nil ? nil : nextGrade(after: start, in: system))
+            }
+        )
+    }
+}
+
+#Preview("Edit") {
+    EditProfileView(user: SampleData.users[0]).environment(AppStore.preview)
+}
+
+#Preview("Setup") {
+    EditProfileView().environment(AppStore.preview)
+}

@@ -41,17 +41,59 @@ struct PlaceIconView: View {
     }
 }
 
+/// A filled pill for an official grade; an outlined "~V6" pill for a proposed grade.
 struct GradeBadge: View {
     let grade: Grade
+    var isProposed = false
     var prominent = false
 
     var body: some View {
-        Text(grade.value)
+        Text(isProposed ? "~\(grade.value)" : grade.value)
             .font(prominent ? .headline.monospacedDigit() : .caption.bold().monospacedDigit())
             .padding(.horizontal, prominent ? 10 : 7)
             .padding(.vertical, prominent ? 5 : 3)
-            .background(.tint, in: Capsule())
+            .background {
+                if isProposed {
+                    Capsule().fill(.black.opacity(0.45))
+                    Capsule().strokeBorder(Color.accentColor, lineWidth: 1.5)
+                } else {
+                    Capsule().fill(Color.accentColor)
+                }
+            }
             .foregroundStyle(.white)
+            .accessibilityLabel(isProposed ? "Proposed grade \(grade.value)" : "Grade \(grade.value)")
+    }
+}
+
+/// The grade to show on a thumbnail: the official grade, else the proposed one, else nothing.
+struct PostGradeBadge: View {
+    let post: Post
+
+    var body: some View {
+        if let grade = post.grade {
+            GradeBadge(grade: grade)
+        } else if let proposed = post.proposedGrade {
+            GradeBadge(grade: proposed, isProposed: true)
+        }
+    }
+}
+
+/// "V4–V6 · 5.11b–5.11d" chips for a climber's self-reported level.
+struct GradeRangeChips: View {
+    let ranges: [GradeRange]
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(ranges, id: \.self) { range in
+                Label(range.display, systemImage: range.system == .vScale || range.system == .font
+                      ? ClimbDiscipline.boulder.symbolName : ClimbDiscipline.sport.symbolName)
+                    .font(.caption.bold().monospacedDigit())
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.accentColor.opacity(0.15), in: Capsule())
+                    .foregroundStyle(.tint)
+            }
+        }
     }
 }
 

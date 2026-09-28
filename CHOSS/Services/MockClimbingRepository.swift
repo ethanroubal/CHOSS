@@ -42,6 +42,11 @@ actor MockClimbingRepository: ClimbingRepository {
         snapshot.posts[index].comments.append(comment)
     }
 
+    func deleteComment(_ commentID: Comment.ID, from postID: Post.ID) async throws {
+        guard let index = snapshot.posts.firstIndex(where: { $0.id == postID }) else { return }
+        snapshot.posts[index].comments.removeAll { $0.id == commentID }
+    }
+
     func createPost(_ post: Post) async throws -> Post {
         snapshot.posts.insert(post, at: 0)
         return post
@@ -50,5 +55,31 @@ actor MockClimbingRepository: ClimbingRepository {
     func addPlace(_ place: Place) async throws -> Place {
         snapshot.places.append(place)
         return place
+    }
+
+    func saveUser(_ user: User) async throws {
+        if let index = snapshot.users.firstIndex(where: { $0.id == user.id }) {
+            snapshot.users[index] = user
+        } else {
+            snapshot.users.append(user)
+        }
+    }
+
+    func addRepost(_ repost: Repost) async throws {
+        snapshot.reposts.append(repost)
+    }
+
+    func removeRepost(postID: Post.ID, by userID: User.ID) async throws {
+        snapshot.reposts.removeAll { $0.postID == postID && $0.userID == userID }
+    }
+
+    func saveConversation(_ conversation: Conversation) async throws {
+        if !snapshot.conversations.contains(where: { $0.id == conversation.id }) {
+            snapshot.conversations.append(conversation)
+        }
+    }
+
+    func sendMessage(_ message: Message) async throws {
+        snapshot.messages.append(message)
     }
 }

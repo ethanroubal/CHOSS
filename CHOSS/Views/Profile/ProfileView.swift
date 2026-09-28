@@ -23,11 +23,13 @@ struct ProfileView: View {
 
     private enum Tab: String, CaseIterable, Identifiable {
         case sends = "Sends"
+        case reposts = "Reposts"
         case places = "Places"
         var id: Self { self }
     }
 
     @State private var tab: Tab = .sends
+    @State private var editing = false
 
     var body: some View {
         ScrollView {
@@ -35,13 +37,7 @@ struct ProfileView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     header(user)
                     bio(user)
-                    if user.id != store.currentUserID {
-                        FollowButton(isFollowing: store.isFollowing(user: user.id)) {
-                            store.toggleFollow(user: user.id)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.horizontal)
-                    }
+                    profileActions(user)
 
                     Picker("Section", selection: $tab) {
                         ForEach(Tab.allCases) { Text($0.rawValue).tag($0) }
@@ -57,6 +53,13 @@ struct ProfileView: View {
                         } else {
                             PostGrid(posts: sends)
                         }
+                    case .reposts:
+                        let reposted = store.repostedPosts(by: user.id)
+                        if reposted.isEmpty {
+                            ContentUnavailableView("No reposts yet", systemImage: "arrow.2.squarepath")
+                        } else {
+                            PostGrid(posts: reposted)
+                        }
                     case .places:
                         LazyVStack(alignment: .leading, spacing: 12) {
                             ForEach(store.followedPlaces(of: user.id)) { place in
@@ -69,6 +72,9 @@ struct ProfileView: View {
                 }
                 .navigationTitle(user.username)
                 .navigationBarTitleDisplayMode(.inline)
+                .sheet(isPresented: $editing) {
+                    EditProfileView(user: user)
+                }
             } else {
                 ContentUnavailableView("Climber not found", systemImage: "person.fill.questionmark")
             }
@@ -87,9 +93,39 @@ struct ProfileView: View {
         .padding(.top, 8)
     }
 
+    @ViewBuilder
+    private func profileActions(_ user: User) -> some View {
+        Group {
+            if user.id == store.currentUserID {
+                Button {
+                    editing = true
+                } label: {
+                    Text("Edit profile")
+                        .font(.subheadline.bold())
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+            } else {
+                FollowButton(isFollowing: store.isFollowing(user: user.id)) {
+                    store.toggleFollow(user: user.id)
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .padding(.horizontal)
+    }
+
     private func bio(_ user: User) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(user.displayName).font(.headline)
+            // Self-reported level, only if the climber chose to show it.
+            if !user.visibleGradeRanges.isEmpty {
+                GradeRangeChips(ranges: user.visibleGradeRanges)
+            } else if user.id == store.currentUserID, user.boulderRange != nil || user.ropeRange != nil {
+                Label("Your grade is hidden from others", systemImage: "eye.slash")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             if !user.bio.isEmpty {
                 Text(user.bio).font(.subheadline)
             }
@@ -102,7 +138,7 @@ struct ProfileView: View {
             let hardest = store.hardestGrades(for: user.id)
             if !hardest.isEmpty {
                 HStack(spacing: 6) {
-                    Text("Hardest:").font(.subheadline).foregroundStyle(.secondary)
+                    Text("Hardest send:").font(.subheadline).foregroundStyle(.secondary)
                     ForEach(hardest, id: \.self) { GradeBadge(grade: $0) }
                 }
             }
@@ -111,9 +147,11 @@ struct ProfileView: View {
     }
 }
 
-/// Lets you view the app as any sample user while there's no real auth.
+/// Lets you view the app as any sample user while there's no real auth,
+/// and walk through new-account profile setup.
 private struct DemoAccountMenu: View {
     @Environment(AppStore.self) private var store
+    @State private var settingUp = false
 
     var body: some View {
         @Bindable var store = store
@@ -123,10 +161,17 @@ private struct DemoAccountMenu: View {
                     Text("@\(user.username)").tag(user.id)
                 }
             }
+            Divider()
+            Button("Create new account…", systemImage: "person.badge.plus") {
+                settingUp = true
+            }
         } label: {
             Image(systemName: "person.2.circle")
         }
         .accessibilityLabel("Switch demo account")
+        .sheet(isPresented: $settingUp) {
+            EditProfileView()
+        }
     }
 }
 
