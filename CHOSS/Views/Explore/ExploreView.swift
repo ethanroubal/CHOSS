@@ -23,6 +23,9 @@ struct ExploreView: View {
                 }
             }
             .navigationTitle("Explore")
+            // Compact bar: a large title that collapses on scroll fights the switcher in the
+            // title slot and makes the page jump around when you scroll back to the top.
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     Picker("Mode", selection: $mode) {
