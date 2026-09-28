@@ -89,6 +89,61 @@ struct Grade: Codable, Hashable {
     }
 }
 
+/// Boulders and routes are graded differently and can't be compared with each other.
+enum GradeCategory: String, CaseIterable, Identifiable, Hashable {
+    case boulder
+    case route
+
+    var id: Self { self }
+
+    var displayName: String {
+        switch self {
+        case .boulder: "Boulders"
+        case .route: "Routes"
+        }
+    }
+
+    /// Every grade in the category is converted to this scale for comparison.
+    var canonicalSystem: GradeSystem { self == .boulder ? .vScale : .yds }
+}
+
+extension GradeSystem {
+    var category: GradeCategory { self == .vScale || self == .font ? .boulder : .route }
+}
+
+extension Grade {
+    /// Approximate Font → V-scale conversion.
+    private static let fontToV: [String: String] = [
+        "3": "VB", "4": "V0", "4+": "V0", "5": "V1", "5+": "V2",
+        "6A": "V3", "6A+": "V3", "6B": "V4", "6B+": "V4", "6C": "V5", "6C+": "V5",
+        "7A": "V6", "7A+": "V7", "7B": "V8", "7B+": "V8", "7C": "V9", "7C+": "V10",
+        "8A": "V11", "8A+": "V12", "8B": "V13", "8B+": "V14", "8C": "V15", "8C+": "V16", "9A": "V17",
+    ]
+
+    /// Approximate French sport → YDS conversion.
+    private static let frenchToYDS: [String: String] = [
+        "4a": "5.5", "4b": "5.6", "4c": "5.7", "5a": "5.8", "5b": "5.9", "5c": "5.10a",
+        "6a": "5.10b", "6a+": "5.10d", "6b": "5.11a", "6b+": "5.11b", "6c": "5.11c", "6c+": "5.11d",
+        "7a": "5.12a", "7a+": "5.12b", "7b": "5.12c", "7b+": "5.12d", "7c": "5.13a", "7c+": "5.13b",
+        "8a": "5.13c", "8a+": "5.13d", "8b": "5.14a", "8b+": "5.14b", "8c": "5.14c", "8c+": "5.14d",
+        "9a": "5.15a", "9a+": "5.15b", "9b": "5.15c", "9b+": "5.15d", "9c": "5.15d", "9c+": "5.15d",
+    ]
+
+    /// The same grade on its category's common scale (V-scale for boulders, YDS for routes),
+    /// so grades from different systems can be compared. nil if it can't be converted.
+    var canonical: Grade? {
+        let converted: String?
+        switch system {
+        case .vScale, .yds: converted = value
+        case .font: converted = Self.fontToV[value]
+        case .french: converted = Self.frenchToYDS[value]
+        }
+        guard let converted else { return nil }
+        let grade = Grade(system: system.category.canonicalSystem, value: converted)
+        return grade.rank >= 0 ? grade : nil
+    }
+}
+
 /// A climber's self-reported ability, e.g. "V4–V6" or just "5.11a".
 struct GradeRange: Codable, Hashable {
     var system: GradeSystem

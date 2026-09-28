@@ -10,6 +10,7 @@ struct PlaceDetailView: View {
     private enum Tab: String, CaseIterable, Identifiable {
         case sends = "Sends"
         case climbs = "Climbs"
+        case leaders = "Leaderboard"
         var id: Self { self }
     }
 
@@ -44,10 +45,10 @@ struct PlaceDetailView: View {
                         .padding(.horizontal)
                     }
 
-                    if place.kind == .crag && tab == .climbs {
-                        climbList(place)
-                    } else {
-                        sends(place)
+                    switch place.kind == .crag ? tab : .sends {
+                    case .sends: sends(place)
+                    case .climbs: climbList(place)
+                    case .leaders: LeaderboardView(placeID: place.id)
                     }
                     BrandFooter()
                 }
