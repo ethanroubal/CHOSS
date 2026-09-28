@@ -489,9 +489,19 @@ final class AppStore {
     func searchPlaces(_ query: String) -> [Place] {
         let q = query.trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty else { return popularPlaces() }
-        return allPlaces.filter {
-            $0.name.localizedCaseInsensitiveContains(q) || $0.locationLine.localizedCaseInsensitiveContains(q)
-        }
+        // Typo-tolerant, by name first, then town/region ("granit", "bishop", "font").
+        return allPlaces
+            .compactMap { place -> (Place, Double)? in
+                let byName = NameMatcher.score(query: q, names: [place.name])
+                let byLocation = NameMatcher.score(query: q, names: [place.city, place.region, place.country])
+                    .map { $0 - 5 }  // a name match beats a same-quality location match
+                guard let score = [byName, byLocation].compactMap({ $0 }).max() else { return nil }
+                return (place, score)
+            }
+            .sorted { lhs, rhs in
+                lhs.1 != rhs.1 ? lhs.1 > rhs.1 : followerCount(of: lhs.0.id) > followerCount(of: rhs.0.id)
+            }
+            .map { $0.0 }
     }
 
     func searchUsers(_ query: String) -> [User] {

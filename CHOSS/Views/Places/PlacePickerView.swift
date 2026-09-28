@@ -1,11 +1,15 @@
 import SwiftUI
 import MapKit
 
-/// Choose the gym or crag a send happened at. Falls back to adding a new place.
+/// Searchable gym/crag picker, used when tagging a send and when choosing a home gym/crag.
+/// Falls back to adding a new place.
 struct PlacePickerView: View {
     @Environment(AppStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @Binding var selection: Place.ID?
+    var title = "Tag a place"
+    /// Label for clearing the selection.
+    var noneLabel = "No place (followers only)"
 
     @State private var query = ""
     @State private var addingPlace = false
@@ -13,20 +17,28 @@ struct PlacePickerView: View {
     var body: some View {
         List {
             if selection != nil {
-                Button("No place (followers only)", role: .destructive) {
+                Button(noneLabel, role: .destructive) {
                     selection = nil
                     dismiss()
                 }
             }
 
             Section(query.isEmpty ? "Your places" : "Results") {
-                ForEach(results) { place in
+                ForEach(Array(results.enumerated()), id: \.element.id) { index, place in
                     Button {
                         selection = place.id
                         dismiss()
                     } label: {
                         HStack {
                             PlaceRow(place: place)
+                            if index == 0 && !query.isEmpty {
+                                Text("Best match")
+                                    .font(.caption2.bold())
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.accentColor.opacity(0.15), in: Capsule())
+                                    .foregroundStyle(.tint)
+                            }
                             if selection == place.id {
                                 Image(systemName: "checkmark").foregroundStyle(.tint)
                             }
@@ -44,8 +56,18 @@ struct PlacePickerView: View {
                 }
             }
         }
-        .navigationTitle("Tag a place")
-        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always))
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
+                    prompt: "Search gyms and crags by name or town")
+        .autocorrectionDisabled()
+        .onSubmit(of: .search) {
+            // Return picks the best match.
+            if let best = results.first, !query.isEmpty {
+                selection = best.id
+                dismiss()
+            }
+        }
         .sheet(isPresented: $addingPlace) {
             AddPlaceView(suggestedName: query) { newID in
                 selection = newID

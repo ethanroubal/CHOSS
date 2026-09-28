@@ -80,7 +80,7 @@ enum NameMatcher {
             .sorted { lhs, rhs in
                 lhs.1 != rhs.1 ? lhs.1 > rhs.1 : lhs.0.name < rhs.0.name
             }
-            .map(\.0)
+            .map { $0.0 }
     }
 
     /// Users that match `query`, best match first. Ties are broken alphabetically.
@@ -90,7 +90,7 @@ enum NameMatcher {
             .sorted { lhs, rhs in
                 lhs.1 != rhs.1 ? lhs.1 > rhs.1 : lhs.0.displayName < rhs.0.displayName
             }
-            .map(\.0)
+            .map { $0.0 }
     }
 
     // MARK: - Helpers

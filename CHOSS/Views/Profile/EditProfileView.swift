@@ -54,10 +54,14 @@ struct EditProfileView: View {
                         .textContentType(.username)
                     TextField("Bio", text: $user.bio, axis: .vertical)
                         .lineLimit(2...4)
-                    Picker("Home gym / crag", selection: $user.homePlaceID) {
-                        Text("None").tag(Place.ID?.none)
-                        ForEach(store.allPlaces) { place in
-                            Text(place.name).tag(Place.ID?.some(place.id))
+                    NavigationLink {
+                        PlacePickerView(selection: $user.homePlaceID,
+                                        title: "Home gym / crag",
+                                        noneLabel: "No home gym / crag")
+                    } label: {
+                        LabeledContent("Home gym / crag") {
+                            Text(store.place(user.homePlaceID)?.name ?? "Choose")
+                                .foregroundStyle(user.homePlaceID == nil ? HierarchicalShapeStyle.secondary : HierarchicalShapeStyle.primary)
                         }
                     }
                 }
