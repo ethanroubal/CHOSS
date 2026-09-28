@@ -1,0 +1,76 @@
+import SwiftUI
+
+struct HomeView: View {
+    @Environment(AppStore.self) private var store
+    @State private var filter: HomeFeedFilter = .all
+
+    var body: some View {
+        let feed = store.homeFeed(filter: filter)
+
+        NavigationStack {
+            ScrollView {
+                Picker("Feed", selection: $filter) {
+                    ForEach(HomeFeedFilter.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal)
+
+                followedPlacesStrip
+
+                if feed.isEmpty {
+                    ContentUnavailableView(
+                        "Nothing here yet",
+                        systemImage: "figure.climbing",
+                        description: Text("Follow gyms, crags and climbers in Explore to fill your feed.")
+                    )
+                    .padding(.top, 60)
+                } else {
+                    LazyVStack(spacing: 12) {
+                        ForEach(feed) { item in
+                            PostCardView(post: item.post, reason: item.reason)
+                            Divider()
+                        }
+                    }
+                }
+            }
+            .refreshable { await store.load() }
+            .navigationTitle("CHOSS")
+            .withAppRoutes()
+        }
+    }
+
+    /// Story-style row of the places you follow, like Instagram's stories tray.
+    @ViewBuilder
+    private var followedPlacesStrip: some View {
+        let places = store.followedPlaces(of: store.currentUserID)
+        if !places.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 14) {
+                    ForEach(places) { place in
+                        NavigationLink(value: Route.place(place.id)) {
+                            VStack(spacing: 4) {
+                                PlaceIconView(place: place, size: 58)
+                                    .padding(3)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                            .stroke(Color.accentColor, lineWidth: 2)
+                                    )
+                                Text(place.name)
+                                    .font(.caption2)
+                                    .lineLimit(1)
+                                    .frame(width: 70)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+            }
+        }
+    }
+}
+
+#Preview {
+    HomeView().environment(AppStore.preview)
+}
