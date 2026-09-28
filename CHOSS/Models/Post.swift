@@ -23,7 +23,8 @@ struct Post: Identifiable, Codable, Hashable {
     var thumbnailURL: URL? = nil
     var routeName: String
     var discipline: ClimbDiscipline
-    /// The official grade (setter / guidebook). Optional: not every climb has one.
+    /// Legacy per-post official grade. No longer set when posting: a climb's grade is now the
+    /// average of everyone's proposed grades (see `AppStore.displayGrade(for:)`).
     var grade: Grade?
     /// What the poster thinks the climb actually is ("soft for V5, feels V4").
     var proposedGrade: Grade? = nil
@@ -32,9 +33,6 @@ struct Post: Identifiable, Codable, Hashable {
     var createdAt: Date
     var likedBy: Set<User.ID> = []
     var comments: [Comment] = []
-
-    /// Official grade if there is one, otherwise the proposed grade. Used for stats and sorting.
-    var effectiveGrade: Grade? { grade ?? proposedGrade }
 }
 
 /// Someone re-sharing a post to their own followers.
@@ -55,7 +53,6 @@ struct PostDraft {
     var routeName = ""
     var discipline: ClimbDiscipline = .boulder
     var gradeSystem: GradeSystem = .vScale
-    var grade: Grade?
     var proposedGrade: Grade?
     var sendStyle: SendStyle = .redpoint
     var caption = ""

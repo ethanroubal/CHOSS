@@ -65,15 +65,15 @@ struct GradeBadge: View {
     }
 }
 
-/// The grade to show on a thumbnail: the official grade, else the proposed one, else nothing.
+/// The grade to show on a thumbnail: the climb's grade (average of proposed grades, or the
+/// guidebook grade if nobody has proposed one). Nothing if the climb has no grade at all.
 struct PostGradeBadge: View {
+    @Environment(AppStore.self) private var store
     let post: Post
 
     var body: some View {
-        if let grade = post.grade {
+        if let grade = store.displayGrade(for: post) {
             GradeBadge(grade: grade)
-        } else if let proposed = post.proposedGrade {
-            GradeBadge(grade: proposed, isProposed: true)
         }
     }
 }
@@ -180,6 +180,8 @@ enum Route: Hashable {
     case climb(Climb.ID)
     /// A scrollable list of posts starting at one of them.
     case feed(PostFeed)
+    /// A profile's followers / following / followed places.
+    case connections(User.ID, ConnectionsTab)
 }
 
 extension View {
@@ -192,6 +194,7 @@ extension View {
             case .post(let id): PostDetailView(postID: id)
             case .climb(let id): ClimbDetailView(climbID: id)
             case .feed(let feed): PostFeedView(feed: feed)
+            case .connections(let userID, let tab): ConnectionsView(userID: userID, tab: tab)
             }
         }
     }

@@ -193,6 +193,14 @@ final class AppStore {
         followedUsers.values.filter { $0.contains(userID) }.count
     }
 
+    /// Climbers who follow `userID`, alphabetically.
+    func followers(of userID: User.ID) -> [User] {
+        followedUsers
+            .filter { $0.value.contains(userID) }
+            .compactMap { users[$0.key] }
+            .sorted { $0.displayName < $1.displayName }
+    }
+
     func followingCount(ofUser userID: User.ID) -> Int {
         followedUsers[userID]?.count ?? 0
     }
@@ -408,7 +416,7 @@ final class AppStore {
             videoURL: draft.videoURL,
             routeName: draft.routeName.trimmingCharacters(in: .whitespacesAndNewlines),
             discipline: draft.discipline,
-            grade: draft.grade,
+            grade: nil,  // the climb's grade is the average of proposed grades
             proposedGrade: draft.proposedGrade,
             sendStyle: draft.sendStyle,
             caption: draft.caption.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -459,19 +467,6 @@ final class AppStore {
         return NameMatcher.rank(pool, query: query)
     }
 
-    /// What the community thinks a climb is: the median of posters' proposed grades
-    /// (on the climb's scale), or nil if nobody has proposed one.
-    func communityGrade(for climbID: Climb.ID) -> Grade? {
-        guard let climb = climbs[climbID] else { return nil }
-        let system = climb.grade?.system ?? climb.discipline.defaultGradeSystem
-        let ranked = posts(ofClimb: climbID)
-            .compactMap(\.proposedGrade)
-            .filter { $0.system == system && $0.rank >= 0 }
-            .sorted { $0.rank < $1.rank }
-        guard !ranked.isEmpty else { return nil }
-        return ranked[(ranked.count - 1) / 2]
-    }
-
     /// Adds a climb that isn't in the database yet (shown as unverified).
     func addClimb(_ climb: Climb) async -> Climb? {
         do {
@@ -518,17 +513,18 @@ final class AppStore {
         return posts.filter { post in
             post.routeName.localizedCaseInsensitiveContains(q)
                 || post.caption.localizedCaseInsensitiveContains(q)
-                || (post.grade?.value.localizedCaseInsensitiveContains(q) ?? false)
-                || (post.proposedGrade?.value.localizedCaseInsensitiveContains(q) ?? false)
+                || (displayGrade(for: post)?.value.localizedCaseInsensitiveContains(q) ?? false)
                 || (place(post.placeID)?.name.localizedCaseInsensitiveContains(q) ?? false)
         }
     }
 
     // MARK: - Stats
 
-    /// Hardest send per grading system, e.g. [V7, 5.12a]. Uses the proposed grade when there's no official one.
+    /// Hardest send per grading system, e.g. [V7, 5.12a], using each climb's average grade.
+    /// Links (sections, not full sends) don't count.
     func hardestGrades(for userID: User.ID) -> [Grade] {
-        let grouped = Dictionary(grouping: posts(by: userID).compactMap(\.effectiveGrade), by: \.system)
+        let sends = posts(by: userID).filter { $0.sendStyle.countsAsSend }
+        let grouped = Dictionary(grouping: sends.compactMap { displayGrade(for: $0) }, by: \.system)
         return GradeSystem.allCases.compactMap { system in
             grouped[system]?.max { $0.rank < $1.rank }
         }

@@ -136,7 +136,7 @@ struct PostCardView: View {
             }
 
             HStack(spacing: 8) {
-                if let grade = post.grade {
+                if let grade = store.displayGrade(for: post) {
                     GradeBadge(grade: grade)
                 }
                 if let climb = store.climb(post.climbID) {
@@ -157,14 +157,8 @@ struct PostCardView: View {
                     .foregroundStyle(.secondary)
             }
 
-            if let proposed = post.proposedGrade {
-                HStack(spacing: 6) {
-                    GradeBadge(grade: proposed, isProposed: true)
-                    Text("Proposed grade")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
+            gradeExplanation
+
 
             if !post.caption.isEmpty {
                 (Text(author?.username ?? "").bold() + Text(" ") + Text(post.caption))
@@ -179,6 +173,27 @@ struct PostCardView: View {
             }
         }
         .padding(.horizontal)
+    }
+
+    /// "Proposed ~V7 · Grade is the average of 3 proposals" under the route line.
+    @ViewBuilder
+    private var gradeExplanation: some View {
+        let average = store.averageGrade(for: post)
+        if post.proposedGrade != nil || average != nil {
+            HStack(spacing: 6) {
+                if let proposed = post.proposedGrade {
+                    Text("Proposed").font(.caption).foregroundStyle(.secondary)
+                    GradeBadge(grade: proposed, isProposed: true)
+                }
+                if let average {
+                    Text(average.count == 1
+                         ? "· Grade from 1 proposal"
+                         : "· Grade is the average of \(average.count) proposals")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
     }
 
     private func countText(_ count: Int, _ singular: String, _ plural: String) -> String? {

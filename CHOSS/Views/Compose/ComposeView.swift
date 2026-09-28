@@ -15,6 +15,7 @@ struct ComposeView: View {
     @State private var isPosting = false
     @State private var errorMessage: String?
     @State private var previewPlayer: AVPlayer?
+    @FocusState private var isEditingText: Bool
 
     init(initialPlaceID: Place.ID? = nil, initialClimbID: Climb.ID? = nil) {
         var draft = PostDraft()
@@ -37,13 +38,21 @@ struct ComposeView: View {
                 Section("Description") {
                     TextField("How did it go? Beta, beta spray, celebrations…", text: $draft.caption, axis: .vertical)
                         .lineLimit(3...8)
+                        .focused($isEditingText)
                 }
             }
+            // Scrolling the form pulls the keyboard down, like Messages.
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("New Send")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
+                }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") { isEditingText = false }
+                        .bold()
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     if isPosting {
@@ -74,7 +83,6 @@ struct ComposeView: View {
             .onChange(of: draft.discipline) { _, discipline in
                 if !discipline.gradeSystems.contains(draft.gradeSystem) {
                     draft.gradeSystem = discipline.defaultGradeSystem
-                    draft.grade = nil
                     draft.proposedGrade = nil
                 }
             }
@@ -179,9 +187,11 @@ struct ComposeView: View {
                         Label("Search for the climb at \(crag.name)", systemImage: "magnifyingglass")
                     }
                     TextField("Or just type a name", text: $draft.routeName)
+                        .focused($isEditingText)
                 }
             } else {
                 TextField("Route / problem name", text: $draft.routeName)
+                    .focused($isEditingText)
             }
 
             Picker("Discipline", selection: $draft.discipline) {
@@ -203,17 +213,14 @@ struct ComposeView: View {
         }
     }
 
-    /// Links the send to an outdoor climb and fills in its name, discipline and guidebook grade.
+    /// Links the send to an outdoor climb and fills in its name and discipline, and uses the
+    /// scale the climb is graded in so your proposal averages in with everyone else's.
     private func link(_ climb: Climb) {
         draft.climbID = climb.id
         draft.routeName = climb.name
         draft.discipline = climb.discipline
-        if let grade = climb.grade {
-            draft.gradeSystem = grade.system
-            draft.grade = grade
-        } else {
-            draft.gradeSystem = climb.discipline.defaultGradeSystem
-        }
+        let climbGrade = store.averageGrade(forClimb: climb.id)?.grade ?? climb.grade
+        draft.gradeSystem = climbGrade?.system ?? climb.discipline.defaultGradeSystem
         if draft.proposedGrade?.system != draft.gradeSystem {
             draft.proposedGrade = nil
         }
@@ -224,8 +231,7 @@ struct ComposeView: View {
         draft.routeName = ""
     }
 
-    /// Both grades are optional: the official grade (from the gym/guidebook) and
-    /// the poster's proposed grade ("feels like").
+    /// You only propose a grade. The climb's grade is the average of everyone's proposals.
     private var gradeSection: some View {
         Section {
             if draft.discipline.gradeSystems.count > 1 {
@@ -235,13 +241,37 @@ struct ComposeView: View {
                 .pickerStyle(.segmented)
             }
 
-            OptionalGradePicker(title: "Grade", system: draft.gradeSystem, grade: $draft.grade)
             OptionalGradePicker(title: "Proposed grade", system: draft.gradeSystem, grade: $draft.proposedGrade)
+
+            if let current = currentClimbGrade {
+                LabeledContent("Current grade") {
+                    HStack(spacing: 6) {
+                        GradeBadge(grade: current.grade)
+                        Text(current.detail).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }
         } header: {
             Text("Grade")
         } footer: {
-            Text("Grade is the official grade from the gym or guidebook. Proposed grade is what you think it really is. Both are optional.")
+            Text("Propose what you think it is. The climb's grade is the average of everyone's proposed grades, and yours counts toward it.")
         }
+    }
+
+    /// The climb's grade before this post: the average of existing proposals for the same climb
+    /// (linked outdoor climb, or the same route name at this place), else the guidebook grade.
+    private var currentClimbGrade: (grade: Grade, detail: String)? {
+        let probe = Post(id: "draft", authorID: store.currentUserID, placeID: draft.placeID,
+                         climbID: draft.climbID, routeName: draft.routeName, discipline: draft.discipline,
+                         sendStyle: draft.sendStyle, caption: "", createdAt: .now)
+        guard store.climbKey(for: probe) != nil else { return nil }
+        if let average = store.averageGrade(for: probe) {
+            return (average.grade, average.count == 1 ? "from 1 proposal" : "avg of \(average.count)")
+        }
+        if let guidebook = store.climb(draft.climbID)?.grade {
+            return (guidebook, "guidebook")
+        }
+        return nil
     }
 
     /// Switching scales converts nothing; it just clears grades from the old scale.
@@ -250,7 +280,6 @@ struct ComposeView: View {
             draft.gradeSystem
         } set: { system in
             draft.gradeSystem = system
-            if draft.grade?.system != system { draft.grade = nil }
             if draft.proposedGrade?.system != system { draft.proposedGrade = nil }
         }
     }

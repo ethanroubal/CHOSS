@@ -163,6 +163,8 @@ enum SendStyle: String, Codable, CaseIterable, Identifiable, Hashable {
     case flash
     case redpoint
     case repeatSend
+    /// Linked a section / moves of the climb, not a full send.
+    case link
 
     var id: Self { self }
 
@@ -172,6 +174,7 @@ enum SendStyle: String, Codable, CaseIterable, Identifiable, Hashable {
         case .flash: "Flash"
         case .redpoint: "Send"
         case .repeatSend: "Repeat"
+        case .link: "Link"
         }
     }
 
@@ -181,6 +184,11 @@ enum SendStyle: String, Codable, CaseIterable, Identifiable, Hashable {
         case .flash: "bolt.fill"
         case .redpoint: "checkmark.seal.fill"
         case .repeatSend: "arrow.clockwise"
+        case .link: "point.3.connected.trianglepath.dotted"
         }
     }
+
+    /// A link is a section of the climb, so it doesn't count as having sent it
+    /// (leaderboards, hardest send).
+    var countsAsSend: Bool { self != .link }
 }

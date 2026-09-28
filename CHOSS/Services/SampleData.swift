@@ -80,7 +80,16 @@ enum SampleData {
         Date().addingTimeInterval(-hours * 3600)
     }
 
-    static let posts: [Post] = [
+    /// Grades are now community averages of proposed grades, so a post's old "official" grade
+    /// becomes the poster's proposal when they didn't make one.
+    static let posts: [Post] = rawPosts.map { post in
+        var post = post
+        if post.proposedGrade == nil { post.proposedGrade = post.grade }
+        post.grade = nil
+        return post
+    }
+
+    private static let rawPosts: [Post] = [
         Post(id: "post_1", authorID: "u_alex", placeID: "p_granite_works", videoURL: video(0),
              routeName: "Blue Crimp Traverse", discipline: .boulder,
              grade: Grade(system: .vScale, value: "V6"), sendStyle: .flash,

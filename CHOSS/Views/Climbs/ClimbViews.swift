@@ -34,7 +34,7 @@ struct ClimbRow: View {
             }
             Spacer(minLength: 0)
             VStack(alignment: .trailing, spacing: 4) {
-                if let grade = climb.grade {
+                if let grade = store.averageGrade(forClimb: climb.id)?.grade ?? climb.grade {
                     GradeBadge(grade: grade)
                 }
                 Label("\(videos)", systemImage: "video")
@@ -104,7 +104,7 @@ struct ClimbDetailView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
                 Text(climb.name).font(.title.bold())
-                if let grade = climb.grade {
+                if let grade = store.averageGrade(forClimb: climb.id)?.grade ?? climb.grade {
                     GradeBadge(grade: grade, prominent: true)
                 }
                 if !climb.isVerified {
@@ -136,6 +136,7 @@ struct ClimbDetailView: View {
     private func stats(_ climb: Climb) -> some View {
         let sends = store.posts(ofClimb: climb.id)
         let flashes = sends.filter { $0.sendStyle == .flash || $0.sendStyle == .onsight }.count
+        let average = store.averageGrade(forClimb: climb.id)
 
         return VStack(spacing: 10) {
             HStack {
@@ -143,12 +144,24 @@ struct ClimbDetailView: View {
                 StatView(value: Set(sends.map(\.authorID)).count, label: "Climbers")
                 StatView(value: flashes, label: "Flashes")
             }
-            if let community = store.communityGrade(for: climb.id) {
+            // The climb's grade is the community's: the average of everyone's proposed grades.
+            Group {
+                if let average {
+                    Text(average.count == 1
+                         ? "Grade from 1 climber's proposal"
+                         : "Grade is the average of \(average.count) climbers' proposals")
+                } else {
+                    Text("No proposed grades yet. Post a send to propose one.")
+                }
+            }
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            if let guidebook = climb.grade, guidebook != average?.grade {
                 HStack(spacing: 6) {
-                    Text("Climbers say it feels like")
-                        .font(.subheadline)
+                    Text("Guidebook grade")
+                        .font(.caption)
                         .foregroundStyle(.secondary)
-                    GradeBadge(grade: community, isProposed: true)
+                    GradeBadge(grade: guidebook, isProposed: true)
                 }
             }
         }

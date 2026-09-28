@@ -22,7 +22,7 @@ extension AppStore {
     /// Top 3 places for the most different climbs sent at a place. Repeats of the same
     /// climb count once; unlinked posts count by route name.
     func mostSendsLeaderboard(at placeID: Place.ID) -> [LeaderboardTier] {
-        let byUser = Dictionary(grouping: posts(at: placeID), by: \.authorID)
+        let byUser = Dictionary(grouping: sends(at: placeID), by: \.authorID)
         let scores = byUser.map { userID, posts -> (userID: User.ID, score: Int, detail: String) in
             let distinct = Set(posts.map { post in
                 post.climbID ?? "name:" + NameMatcher.normalize(post.routeName.isEmpty ? post.id : post.routeName)
@@ -33,11 +33,12 @@ extension AppStore {
     }
 
     /// Top 3 places for the hardest send at a place, within one category (boulders or routes).
+    /// A send counts at the climb's grade (the average of everyone's proposed grades).
     /// Grades from other scales are converted (Font → V, French → YDS) so everyone is comparable.
     func hardestSendLeaderboard(at placeID: Place.ID, category: GradeCategory) -> [LeaderboardTier] {
         var best: [User.ID: (grade: Grade, post: Post)] = [:]
-        for post in posts(at: placeID) {
-            guard let grade = sendGrade(post)?.canonical, grade.system.category == category else { continue }
+        for post in sends(at: placeID) {
+            guard let grade = displayGrade(for: post)?.canonical, grade.system.category == category else { continue }
             if let current = best[post.authorID], current.grade.rank >= grade.rank { continue }
             best[post.authorID] = (grade, post)
         }
@@ -50,16 +51,15 @@ extension AppStore {
 
     /// Which categories have graded sends at a place, for the Boulders / Routes switch.
     func leaderboardCategories(at placeID: Place.ID) -> [GradeCategory] {
-        let present = Set(posts(at: placeID).compactMap { sendGrade($0)?.canonical?.system.category })
+        let present = Set(sends(at: placeID).compactMap { displayGrade(for: $0)?.canonical?.system.category })
         return GradeCategory.allCases.filter(present.contains)
     }
 
     // MARK: - Helpers
 
-    /// The grade a send counts at: the official grade, then the linked climb's guidebook grade,
-    /// then the poster's proposed grade.
-    private func sendGrade(_ post: Post) -> Grade? {
-        post.grade ?? climb(post.climbID)?.grade ?? post.proposedGrade
+    /// Full sends at a place. Links (sections of a climb) don't count toward leaderboards.
+    private func sends(at placeID: Place.ID) -> [Post] {
+        posts(at: placeID).filter { $0.sendStyle.countsAsSend }
     }
 
     private func climbName(_ post: Post) -> String {

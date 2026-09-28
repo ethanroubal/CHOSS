@@ -87,12 +87,21 @@ struct ProfileView: View {
         HStack(spacing: 16) {
             AvatarView(user: user, size: 84)
             StatView(value: store.posts(by: user.id).count, label: "Sends")
-            StatView(value: store.followerCount(ofUser: user.id), label: "Followers")
-            StatView(value: store.followingCount(ofUser: user.id), label: "Following")
-            StatView(value: store.followedPlaces(of: user.id).count, label: "Places")
+            // Tap a count to see (and search) the list.
+            statLink(user, .followers, value: store.followerCount(ofUser: user.id))
+            statLink(user, .following, value: store.followingCount(ofUser: user.id))
+            statLink(user, .places, value: store.followedPlaces(of: user.id).count)
         }
         .padding(.horizontal)
         .padding(.top, 8)
+    }
+
+    private func statLink(_ user: User, _ tab: ConnectionsTab, value: Int) -> some View {
+        NavigationLink(value: Route.connections(user.id, tab)) {
+            StatView(value: value, label: tab.title)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder
