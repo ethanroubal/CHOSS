@@ -36,6 +36,16 @@ The `Place` model already supports this: `source`, `externalID`, `isVerified`, `
 3. **Verification:** gym owners claim their gym (confirmed by email domain or a phone call). For crags, a place counts as verified when it came from OpenBeta or after N distinct climbers have posted there.
 4. **Merging:** admins merge duplicates. Posts get re-pointed to the surviving place, and the old ID becomes an alias so deep links still work.
 
+### Outdoor climbs
+
+Crags also get a list of permanent climbs (`Climb` model), so every video of a climb collects on
+that climb's page as beta. Gyms don't, because their routes are reset every few weeks.
+
+- **Seed** from OpenBeta: `scripts/import_places.py openbeta-climbs --path <crag path> --crag-id <place id>`.
+  It groups climbs by the wall or boulder directly under the crag and maps OpenBeta grades onto the app's scales (e.g. `5.10+` becomes `5.10c`).
+- **User-added:** from the composer or the crag's Climbs tab. If a very similar name already exists at that crag, the app suggests "Did you mean…?" first. New climbs are marked unverified.
+- **Moderation:** handled the same way as places (merge duplicates and re-point posts). A verified climb needs an OpenBeta match or several climbers posting to it.
+
 ## 3. Why not only user-added?
 
 - **Cold start:** a new user searches for their gym, and if it isn't there they may leave the app.

@@ -16,10 +16,15 @@ struct ComposeView: View {
     @State private var errorMessage: String?
     @State private var previewPlayer: AVPlayer?
 
-    init(initialPlaceID: Place.ID? = nil) {
+    init(initialPlaceID: Place.ID? = nil, initialClimbID: Climb.ID? = nil) {
         var draft = PostDraft()
         draft.placeID = initialPlaceID
+        draft.climbID = initialClimbID
         _draft = State(initialValue: draft)
+    }
+
+    private var taggedCrag: Place? {
+        store.place(draft.placeID).flatMap { $0.kind == .crag ? $0 : nil }
     }
 
     var body: some View {
@@ -48,6 +53,18 @@ struct ComposeView: View {
                             .bold()
                             .disabled(!draft.isReady)
                     }
+                }
+            }
+            .onAppear {
+                // Opened from a climb's page: fill in its details.
+                if let climb = store.climb(draft.climbID), draft.routeName.isEmpty {
+                    link(climb)
+                }
+            }
+            .onChange(of: draft.placeID) { _, placeID in
+                // A climb belongs to one crag; changing the place unlinks it.
+                if let climb = store.climb(draft.climbID), climb.placeID != placeID {
+                    unlinkClimb()
                 }
             }
             .onChange(of: pickerItem) { _, item in
@@ -146,17 +163,65 @@ struct ComposeView: View {
     }
 
     private var climbSection: some View {
-        Section("Climb") {
-            TextField("Route / problem name", text: $draft.routeName)
+        Section {
+            if let crag = taggedCrag {
+                if let climb = store.climb(draft.climbID) {
+                    NavigationLink {
+                        ClimbPickerView(placeID: crag.id) { link($0) }
+                    } label: {
+                        ClimbRow(climb: climb)
+                    }
+                    Button("Unlink climb", role: .destructive) { unlinkClimb() }
+                } else {
+                    NavigationLink {
+                        ClimbPickerView(placeID: crag.id) { link($0) }
+                    } label: {
+                        Label("Search for the climb at \(crag.name)", systemImage: "magnifyingglass")
+                    }
+                    TextField("Or just type a name", text: $draft.routeName)
+                }
+            } else {
+                TextField("Route / problem name", text: $draft.routeName)
+            }
 
             Picker("Discipline", selection: $draft.discipline) {
                 ForEach(ClimbDiscipline.allCases) { Text($0.displayName).tag($0) }
             }
+            .disabled(draft.climbID != nil)
 
             Picker("Style", selection: $draft.sendStyle) {
                 ForEach(SendStyle.allCases) { Label($0.displayName, systemImage: $0.symbolName).tag($0) }
             }
+        } header: {
+            Text("Climb")
+        } footer: {
+            if let climb = store.climb(draft.climbID) {
+                Text("Your video will show up on \(climb.name)'s page, where people look for beta.")
+            } else if taggedCrag != nil {
+                Text("Pick the climb so your video shows up when people search it for beta.")
+            }
         }
+    }
+
+    /// Links the send to an outdoor climb and fills in its name, discipline and guidebook grade.
+    private func link(_ climb: Climb) {
+        draft.climbID = climb.id
+        draft.routeName = climb.name
+        draft.discipline = climb.discipline
+        if let grade = climb.grade {
+            draft.gradeSystem = grade.system
+            draft.grade = grade
+        } else {
+            draft.gradeSystem = climb.discipline.defaultGradeSystem
+        }
+        if draft.proposedGrade?.system != draft.gradeSystem {
+            draft.proposedGrade = nil
+        }
+    }
+
+    private func unlinkClimb() {
+        draft.climbID = nil
+        draft.routeName = ""
     }
 
     /// Both grades are optional: the official grade (from the gym/guidebook) and
@@ -221,7 +286,7 @@ struct ComposeView: View {
 }
 
 /// A grade that can be left blank: "Not set" or a value on the given scale.
-private struct OptionalGradePicker: View {
+struct OptionalGradePicker: View {
     let title: String
     let system: GradeSystem
     @Binding var grade: Grade?

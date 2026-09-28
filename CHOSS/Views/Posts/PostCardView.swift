@@ -140,8 +140,19 @@ struct PostCardView: View {
                 if let grade = post.grade {
                     GradeBadge(grade: grade)
                 }
-                Text(post.routeName.isEmpty ? "Unnamed route" : post.routeName)
-                    .font(.subheadline.bold())
+                if let climb = store.climb(post.climbID) {
+                    // Linked outdoor climb: tap for every video of it (beta).
+                    NavigationLink(value: Route.climb(climb.id)) {
+                        Label(climb.name, systemImage: "mountain.2")
+                            .font(.subheadline.bold())
+                            .labelStyle(.titleAndIcon)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.tint)
+                } else {
+                    Text(post.routeName.isEmpty ? "Unnamed route" : post.routeName)
+                        .font(.subheadline.bold())
+                }
                 Text("· \(post.discipline.displayName)")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)

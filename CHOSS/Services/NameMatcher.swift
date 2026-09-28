@@ -1,24 +1,25 @@
 import Foundation
 
-/// Forgiving name matching for "send to…" search: prefix, word-prefix, substring,
-/// abbreviation ("jo" → "Jess Okafor") and small typos ("alx" → "alexcrimps", "priay" → "Priya").
+/// Forgiving name matching used by "send to…" and climb search: prefix, word-prefix, substring,
+/// initials ("jo" → "Jess Okafor", "ml" → "Midnight Lightning"), small typos ("priay" → "Priya",
+/// "midnite" → "Midnight Lightning"), words in any order, and letters in order ("alxc" → "alexcrimps").
 enum NameMatcher {
     /// Higher is better; nil means no match. An empty query matches everything with score 0.
-    static func score(query: String, user: User) -> Double? {
+    /// The first name is the primary one (used for initials).
+    static func score(query: String, names: [String]) -> Double? {
         let q = normalize(query)
         guard !q.isEmpty else { return 0 }
 
-        let name = normalize(user.displayName)
-        let username = normalize(user.username)
-        let words = name.split(separator: " ").map(String.init)
-            + username.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init)
+        let fields = names.map(normalize).filter { !$0.isEmpty }
+        guard let primary = fields.first else { return nil }
+        let words = fields.flatMap { $0.split(separator: " ").map(String.init) }
 
         var best: Double?
         func consider(_ value: Double?) {
             if let value, value > (best ?? -1) { best = value }
         }
 
-        for field in [name, username] {
+        for field in fields {
             consider(field == q ? 100 : nil)
             consider(field.hasPrefix(q) ? 90 : nil)
             consider(field.contains(q) ? 70 : nil)
@@ -26,15 +27,27 @@ enum NameMatcher {
         for word in words {
             consider(word.hasPrefix(q) ? 85 : nil)
         }
+
+        // Every query word starts (or nearly starts) some word: "lightning midnight", "midnite light".
+        let queryWords = q.split(separator: " ").map(String.init)
+        if queryWords.count > 1 {
+            let allMatch = queryWords.allSatisfy { qw in
+                words.contains { w in
+                    w.hasPrefix(qw) || (qw.count >= 4 && editDistance(qw, String(w.prefix(qw.count))) <= (qw.count >= 6 ? 2 : 1))
+                }
+            }
+            consider(allMatch ? 80 : nil)
+        }
+
         // Initials: "jo" or "j o" → Jess Okafor.
-        let initials = String(name.split(separator: " ").compactMap(\.first))
+        let initials = String(primary.split(separator: " ").compactMap(\.first))
         let compactQuery = q.replacingOccurrences(of: " ", with: "")
         consider(compactQuery.count >= 2 && initials.hasPrefix(compactQuery) ? 75 : nil)
 
         // Typos: compare against same-length prefixes of each word / whole field.
         if q.count >= 3 {
             let allowed = q.count >= 6 ? 2 : 1
-            for candidate in words + [name, username] {
+            for candidate in words + fields {
                 let prefix = String(candidate.prefix(q.count))
                 let distance = editDistance(q, prefix)
                 if distance <= allowed {
@@ -44,12 +57,30 @@ enum NameMatcher {
         }
 
         // Letters in order, possibly with gaps ("alxc" → "alexcrimps").
-        for field in [name, username] {
+        for field in fields {
             if let compactness = subsequenceCompactness(q, in: field) {
                 consider(30 + 20 * compactness)
             }
         }
         return best
+    }
+
+    static func score(query: String, user: User) -> Double? {
+        score(query: query, names: [user.displayName, user.username])
+    }
+
+    static func score(query: String, climb: Climb) -> Double? {
+        score(query: query, names: [climb.name])
+    }
+
+    /// Climbs that match `query`, best match first. Ties are broken alphabetically.
+    static func rank(_ climbs: [Climb], query: String) -> [Climb] {
+        climbs
+            .compactMap { climb in score(query: query, climb: climb).map { (climb, $0) } }
+            .sorted { lhs, rhs in
+                lhs.1 != rhs.1 ? lhs.1 > rhs.1 : lhs.0.name < rhs.0.name
+            }
+            .map(\.0)
     }
 
     /// Users that match `query`, best match first. Ties are broken alphabetically.

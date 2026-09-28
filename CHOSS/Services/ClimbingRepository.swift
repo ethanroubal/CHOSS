@@ -4,6 +4,8 @@ import Foundation
 struct AppSnapshot {
     var users: [User]
     var places: [Place]
+    /// Permanent outdoor climbs at crags.
+    var climbs: [Climb] = []
     var posts: [Post]
     /// userID → places that user follows.
     var followedPlaces: [User.ID: Set<Place.ID>]
@@ -26,6 +28,8 @@ protocol ClimbingRepository: Sendable {
     /// Uploads the video (in a real backend) and persists the post, returning the stored version.
     func createPost(_ post: Post) async throws -> Post
     func addPlace(_ place: Place) async throws -> Place
+    /// User-submitted outdoor climb that wasn't in the database yet.
+    func addClimb(_ climb: Climb) async throws -> Climb
     /// Creates or updates a profile (sign-up and "Edit profile").
     func saveUser(_ user: User) async throws
     func addRepost(_ repost: Repost) async throws

@@ -10,6 +10,9 @@ load into the backend. See docs/PLACES_DATA_STRATEGY.md for why these sources.
   # Crags from OpenBeta (CC0 climbing data)
   python3 scripts/import_places.py openbeta --path USA Kentucky --depth 4 > crags-ky.json
 
+  # Every climb inside one crag (matches the app's `Climb` model)
+  python3 scripts/import_places.py openbeta-climbs --path USA Kentucky "Red River Gorge" "Muir Valley" > climbs.json
+
 Stdlib only. Re-running is safe: every record carries `externalID`, so the backend can
 upsert on (source, externalID) and never create duplicates.
 """
@@ -146,6 +149,116 @@ def import_openbeta(args):
     return [p for p in (openbeta_to_place(a, args.path[0]) for a in picked) if p]
 
 
+# --- OpenBeta climbs -------------------------------------------------------------
+
+OPENBETA_CLIMBS_QUERY = """
+query CragClimbs($tokens: [String]!) {
+  areas(filter: { path_tokens: { tokens: $tokens } }) {
+    uuid
+    area_name
+    pathTokens
+    climbs {
+      uuid
+      name
+      grades { vscale yds font french }
+      type { sport trad bouldering tr }
+      content { description }
+    }
+  }
+}
+"""
+
+# App grade systems, in preference order per discipline.
+GRADE_FIELDS = {"boulder": [("vscale", "vScale"), ("font", "font")],
+                "rope": [("yds", "yds"), ("french", "french")]}
+
+
+def climb_discipline(types):
+    types = types or {}
+    if types.get("bouldering"):
+        return "boulder"
+    if types.get("trad"):
+        return "trad"
+    if types.get("sport"):
+        return "sport"
+    if types.get("tr"):
+        return "topRope"
+    return None
+
+
+def yds_letter_grade(value):
+    """'5.10-' → 5.10a, '5.10' → 5.10b, '5.10+' → 5.10c (the app's YDS scale uses letters from 5.10 up)."""
+    base = value.split()[0].split("/")[0]  # "5.12a/b" → 5.12a
+    modifier = base[-1] if base[-1] in "+-" else ""
+    base = base.rstrip("+-")
+    try:
+        number = int(base.split(".")[1]) if base.startswith("5.") and base[2:].isdigit() else None
+    except (IndexError, ValueError):
+        number = None
+    if number is not None and number >= 10:
+        return base + {"-": "a", "": "b", "+": "c"}[modifier]
+    return base
+
+
+def climb_grade(grades, discipline):
+    grades = grades or {}
+    for field, system in GRADE_FIELDS["boulder" if discipline == "boulder" else "rope"]:
+        value = (grades.get(field) or "").strip()
+        if value:
+            # OpenBeta sometimes adds modifiers ("V4-5", "5.10+"); keep the base grade the app knows.
+            if system == "vScale":
+                value = value.split("-")[0].rstrip("+-")
+            if system == "yds":
+                value = yds_letter_grade(value)
+            return {"system": system, "value": value}
+    return None
+
+
+def openbeta_climb(climb, crag_id, area_name):
+    discipline = climb_discipline(climb.get("type"))
+    if not discipline:  # ice, alpine, aid-only… not supported in the app yet
+        return None
+    record = {
+        "id": f"c_ob_{climb['uuid']}",
+        "placeID": crag_id,
+        "name": climb["name"],
+        "area": area_name,
+        "discipline": discipline,
+        "about": ((climb.get("content") or {}).get("description") or "").strip()[:500],
+        "source": "openBeta",
+        "externalID": climb["uuid"],
+        "isVerified": True,
+    }
+    grade = climb_grade(climb.get("grades"), discipline)
+    if grade:
+        record["grade"] = grade
+    return record
+
+
+def import_openbeta_climbs(args):
+    raw = post(OPENBETA_URL,
+               json.dumps({"query": OPENBETA_CLIMBS_QUERY, "variables": {"tokens": args.path}}).encode(),
+               "application/json")
+    if raw.get("errors"):
+        sys.exit(f"OpenBeta error: {raw['errors']}")
+    areas = raw["data"]["areas"]
+    crag = next((a for a in areas if a.get("pathTokens") == args.path), None)
+    if crag is None:
+        sys.exit(f"No OpenBeta area with path {args.path}")
+    crag_id = args.crag_id or f"p_ob_{crag['uuid']}"
+    depth = len(args.path)
+    climbs = []
+    for area in areas:
+        tokens = area.get("pathTokens") or []
+        # Group under the wall/boulder directly below the crag ("Midnight Lightning" → "Camp 4").
+        area_name = tokens[depth] if len(tokens) > depth else ""
+        for climb in area.get("climbs") or []:
+            record = openbeta_climb(climb, crag_id, area_name)
+            if record:
+                climbs.append(record)
+    return climbs
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="source", required=True)
@@ -160,10 +273,15 @@ def main():
     ob.add_argument("--min-climbs", type=int, default=10, help="skip tiny areas")
     ob.set_defaults(run=import_openbeta)
 
+    obc = sub.add_parser("openbeta-climbs", help="all climbs inside one OpenBeta crag")
+    obc.add_argument("--path", nargs="+", required=True, help="the crag's full area path")
+    obc.add_argument("--crag-id", help="CHOSS place ID to attach climbs to (default: p_ob_<crag uuid>)")
+    obc.set_defaults(run=import_openbeta_climbs)
+
     args = parser.parse_args()
     places = args.run(args)
     json.dump(places, sys.stdout, indent=2, ensure_ascii=False)
-    print(f"\n{len(places)} places", file=sys.stderr)
+    print(f"\n{len(places)} records", file=sys.stderr)
 
 
 if __name__ == "__main__":

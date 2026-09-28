@@ -5,6 +5,7 @@ struct SearchView: View {
 
     enum Scope: String, CaseIterable, Identifiable {
         case places = "Places"
+        case climbs = "Climbs"
         case climbers = "Climbers"
         case sends = "Sends"
         var id: Self { self }
@@ -20,6 +21,11 @@ struct SearchView: View {
                 case .places:
                     ForEach(store.searchPlaces(query)) { place in
                         NavigationLink(value: Route.place(place.id)) { PlaceRow(place: place) }
+                    }
+                case .climbs:
+                    // Outdoor climbs across all crags: open one to see everyone's beta videos.
+                    ForEach(store.searchClimbs(query)) { climb in
+                        NavigationLink(value: Route.climb(climb.id)) { ClimbRow(climb: climb, showsCrag: true) }
                     }
                 case .climbers:
                     ForEach(store.searchUsers(query)) { user in
@@ -38,7 +44,7 @@ struct SearchView: View {
                 }
             }
             .navigationTitle("Search")
-            .searchable(text: $query, prompt: "Gyms, crags, climbers, routes")
+            .searchable(text: $query, prompt: "Gyms, crags, climbs, climbers")
             .searchScopes($scope, activation: .onSearchPresentation) {
                 ForEach(Scope.allCases) { Text($0.rawValue).tag($0) }
             }
@@ -49,6 +55,7 @@ struct SearchView: View {
     private var isEmptyResult: Bool {
         switch scope {
         case .places: store.searchPlaces(query).isEmpty
+        case .climbs: store.searchClimbs(query).isEmpty
         case .climbers: store.searchUsers(query).isEmpty
         case .sends: store.searchPosts(query).isEmpty
         }

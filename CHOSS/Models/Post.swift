@@ -17,6 +17,8 @@ struct Post: Identifiable, Codable, Hashable {
     let id: ID
     let authorID: User.ID
     var placeID: Place.ID?
+    /// The outdoor climb this is a send of (crags only), so it shows up as beta on that climb.
+    var climbID: Climb.ID? = nil
     var videoURL: URL?
     var thumbnailURL: URL? = nil
     var routeName: String
@@ -49,6 +51,7 @@ struct Repost: Identifiable, Codable, Hashable {
 struct PostDraft {
     var videoURL: URL?
     var placeID: Place.ID?
+    var climbID: Climb.ID?
     var routeName = ""
     var discipline: ClimbDiscipline = .boulder
     var gradeSystem: GradeSystem = .vScale

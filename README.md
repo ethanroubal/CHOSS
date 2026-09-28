@@ -8,9 +8,10 @@ shows up in your feed. You can follow individual climbers too, Instagram-style.
 
 - **Home:** a feed of sends posted to places you follow plus climbers you follow, filterable by *All / Places / Climbers*. A row of your followed places sits at the top, like Instagram's stories tray.
 - **Explore:** trending sends (filter by boulder/sport/trad/top-rope), popular gyms and crags, and a map of every place.
-- **Search:** places, climbers, and sends (by route name, grade, place or caption).
+- **Search:** places, outdoor climbs, climbers, and sends (by route name, grade, place or caption).
 - **Profile:** stats, hardest grades, a grid of sends, and followed places.
 - **Place page:** follow button, follower/send/climber counts, map, sends at this place, and a *Post a send* button.
+- **Crag profiles and climbs:** outdoor crags also have a *Climbs* tab listing their permanent routes and problems, grouped by area and searchable by name (typo-tolerant). Each climb has its own page with every video posted of it (beta, sortable by newest or most liked), its guidebook grade, the grade climbers say it feels like, and a *Post your send* button. When posting at a crag you search the crag's climbs and pick the best match, or add a missing one, so the video is filed under that climb.
 - **Post a send:** pick or record a video, tag a gym or crag, choose discipline and send style (onsight/flash/send/repeat), and add a description. Two optional grades (V-scale, Font, YDS or French): the official **Grade** and your **Proposed Grade** ("feels like"). Untagged posts only reach your followers.
 - **Engagement:** likes (including double-tap on the video), comments (swipe to delete your own), and reposts. Reposts show up in your followers' feeds as "X reposted" and on a Reposts tab on your profile.
 - **Direct messages:** the paper-plane button on a post opens *Send to*, which searches the people you follow with forgiving name matching (prefixes, initials, typos like "priay" → Priya). Pick one or more people, add a note, and send. The Messages inbox is the paper plane on Home.

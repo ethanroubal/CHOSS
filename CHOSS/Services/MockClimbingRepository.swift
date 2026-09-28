@@ -57,6 +57,11 @@ actor MockClimbingRepository: ClimbingRepository {
         return place
     }
 
+    func addClimb(_ climb: Climb) async throws -> Climb {
+        snapshot.climbs.append(climb)
+        return climb
+    }
+
     func saveUser(_ user: User) async throws {
         if let index = snapshot.users.firstIndex(where: { $0.id == user.id }) {
             snapshot.users[index] = user

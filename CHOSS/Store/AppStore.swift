@@ -38,6 +38,7 @@ final class AppStore {
 
     private(set) var users: [User.ID: User] = [:]
     private(set) var places: [Place.ID: Place] = [:]
+    private(set) var climbs: [Climb.ID: Climb] = [:]
     /// Newest first.
     private(set) var posts: [Post] = []
     private(set) var followedPlaces: [User.ID: Set<Place.ID>] = [:]
@@ -73,6 +74,7 @@ final class AppStore {
     private func apply(_ snapshot: AppSnapshot) {
         users = Dictionary(uniqueKeysWithValues: snapshot.users.map { ($0.id, $0) })
         places = Dictionary(uniqueKeysWithValues: snapshot.places.map { ($0.id, $0) })
+        climbs = Dictionary(uniqueKeysWithValues: snapshot.climbs.map { ($0.id, $0) })
         posts = snapshot.posts.sorted { $0.createdAt > $1.createdAt }
         followedPlaces = snapshot.followedPlaces
         followedUsers = snapshot.followedUsers
@@ -100,6 +102,7 @@ final class AppStore {
     func user(_ id: User.ID) -> User? { users[id] }
     func place(_ id: Place.ID?) -> Place? { id.flatMap { places[$0] } }
     func post(_ id: Post.ID) -> Post? { posts.first { $0.id == id } }
+    func climb(_ id: Climb.ID?) -> Climb? { id.flatMap { climbs[$0] } }
 
     var allPlaces: [Place] { places.values.sorted { $0.name < $1.name } }
     var allUsers: [User] { users.values.sorted { $0.displayName < $1.displayName } }
@@ -401,6 +404,7 @@ final class AppStore {
             id: UUID().uuidString,
             authorID: currentUserID,
             placeID: draft.placeID,
+            climbID: draft.climbID,
             videoURL: draft.videoURL,
             routeName: draft.routeName.trimmingCharacters(in: .whitespacesAndNewlines),
             discipline: draft.discipline,
@@ -426,6 +430,53 @@ final class AppStore {
             let saved = try await repository.addPlace(place)
             places[saved.id] = saved
             if !isFollowing(place: saved.id) { toggleFollow(place: saved.id) }
+            return saved
+        } catch {
+            lastError = error.localizedDescription
+            return nil
+        }
+    }
+
+    // MARK: - Outdoor climbs
+
+    /// Every climb at a crag, alphabetically.
+    func climbs(at placeID: Place.ID) -> [Climb] {
+        climbs.values.filter { $0.placeID == placeID }.sorted { $0.name < $1.name }
+    }
+
+    /// Every send video of a climb (its beta), newest first.
+    func posts(ofClimb climbID: Climb.ID) -> [Post] {
+        posts.filter { $0.climbID == climbID }
+    }
+
+    /// Fuzzy climb-name search, best match first, optionally limited to one crag.
+    func searchClimbs(_ query: String, at placeID: Place.ID? = nil) -> [Climb] {
+        let pool = placeID.map { climbs(at: $0) } ?? climbs.values.sorted { $0.name < $1.name }
+        guard !query.trimmingCharacters(in: .whitespaces).isEmpty else {
+            // No query: most-filmed climbs first, handy for finding beta.
+            return pool.sorted { posts(ofClimb: $0.id).count > posts(ofClimb: $1.id).count }
+        }
+        return NameMatcher.rank(pool, query: query)
+    }
+
+    /// What the community thinks a climb is: the median of posters' proposed grades
+    /// (on the climb's scale), or nil if nobody has proposed one.
+    func communityGrade(for climbID: Climb.ID) -> Grade? {
+        guard let climb = climbs[climbID] else { return nil }
+        let system = climb.grade?.system ?? climb.discipline.defaultGradeSystem
+        let ranked = posts(ofClimb: climbID)
+            .compactMap(\.proposedGrade)
+            .filter { $0.system == system && $0.rank >= 0 }
+            .sorted { $0.rank < $1.rank }
+        guard !ranked.isEmpty else { return nil }
+        return ranked[(ranked.count - 1) / 2]
+    }
+
+    /// Adds a climb that isn't in the database yet (shown as unverified).
+    func addClimb(_ climb: Climb) async -> Climb? {
+        do {
+            let saved = try await repository.addClimb(climb)
+            climbs[saved.id] = saved
             return saved
         } catch {
             lastError = error.localizedDescription

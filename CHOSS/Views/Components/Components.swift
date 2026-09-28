@@ -177,6 +177,7 @@ enum Route: Hashable {
     case place(Place.ID)
     case user(User.ID)
     case post(Post.ID)
+    case climb(Climb.ID)
 }
 
 extension View {
@@ -187,6 +188,7 @@ extension View {
             case .place(let id): PlaceDetailView(placeID: id)
             case .user(let id): ProfileView(userID: id)
             case .post(let id): PostDetailView(postID: id)
+            case .climb(let id): ClimbDetailView(climbID: id)
             }
         }
     }
