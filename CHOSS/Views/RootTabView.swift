@@ -15,7 +15,14 @@ struct RootTabView: View {
         if store.isLoaded {
             TabView(selection: $selection) {
                 HomeView()
-                    .tabItem { Label("Home", systemImage: "house") }
+                    .tabItem {
+                        // The CHOSS hold is the Home button.
+                        Label {
+                            Text("Home")
+                        } icon: {
+                            Image("HoldMark")
+                        }
+                    }
                     .tag(Tab.home)
                 ExploreView()
                     .tabItem { Label("Explore", systemImage: "safari") }
@@ -43,7 +50,7 @@ struct RootTabView: View {
                 ComposeView()
             }
         } else {
-            ProgressView("Loading…")
+            SplashView()
         }
     }
 }

@@ -32,11 +32,16 @@ struct EditProfileView: View {
         NavigationStack {
             Form {
                 Section {
-                    HStack {
-                        Spacer()
+                    VStack(spacing: 14) {
+                        if mode == .setup {
+                            WordmarkView(height: 36)
+                            Text("Welcome! Set up your climber profile.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
                         AvatarView(user: user, size: 84)
-                        Spacer()
                     }
+                    .frame(maxWidth: .infinity)
                     .listRowBackground(Color.clear)
                 }
 

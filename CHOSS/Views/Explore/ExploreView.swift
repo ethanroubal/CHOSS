@@ -50,6 +50,7 @@ struct ExploreView: View {
                     .font(.title3.bold())
                     .padding(.horizontal)
                 PostGrid(posts: store.trendingPosts(discipline: discipline))
+                BrandFooter()
             }
         }
     }
@@ -73,7 +74,7 @@ struct ExploreView: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
                 .background(isOn ? Color.accentColor : Color(.secondarySystemBackground), in: Capsule())
-                .foregroundStyle(isOn ? Color.white : Color.primary)
+                .foregroundStyle(isOn ? Brand.onAccent : Color.primary)
         }
         .buttonStyle(.plain)
     }

@@ -60,7 +60,7 @@ struct GradeBadge: View {
                     Capsule().fill(Color.accentColor)
                 }
             }
-            .foregroundStyle(.white)
+            .foregroundStyle(isProposed ? Color.white : Brand.onAccent)
             .accessibilityLabel(isProposed ? "Proposed grade \(grade.value)" : "Grade \(grade.value)")
     }
 }
@@ -109,7 +109,7 @@ struct FollowButton: View {
         }
         .buttonStyle(.borderedProminent)
         .tint(isFollowing ? Color(.systemGray5) : .accentColor)
-        .foregroundStyle(isFollowing ? Color.primary : Color.white)
+        .foregroundStyle(isFollowing ? Color.primary : Brand.onAccent)
         .animation(.snappy, value: isFollowing)
     }
 }

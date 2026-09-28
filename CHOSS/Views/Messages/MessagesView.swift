@@ -156,7 +156,7 @@ private struct MessageBubble: View {
                         .padding(.vertical, 8)
                         .background(isMine ? Color.accentColor : Color(.secondarySystemBackground),
                                     in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                        .foregroundStyle(isMine ? Color.white : Color.primary)
+                        .foregroundStyle(isMine ? Brand.onAccent : Color.primary)
                 }
             }
             if !isMine { Spacer(minLength: 50) }

@@ -27,6 +27,7 @@ struct PlaceDetailView: View {
                     .padding(.horizontal)
 
                     sends(place)
+                    BrandFooter()
                 }
                 .navigationTitle(place.name)
                 .navigationBarTitleDisplayMode(.inline)

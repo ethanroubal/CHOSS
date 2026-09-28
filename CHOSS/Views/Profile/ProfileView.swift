@@ -69,6 +69,8 @@ struct ProfileView: View {
                         }
                         .padding(.horizontal)
                     }
+
+                    BrandFooter()
                 }
                 .navigationTitle(user.username)
                 .navigationBarTitleDisplayMode(.inline)

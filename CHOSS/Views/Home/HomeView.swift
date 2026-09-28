@@ -18,11 +18,15 @@ struct HomeView: View {
                 followedPlacesStrip
 
                 if feed.isEmpty {
-                    ContentUnavailableView(
-                        "Nothing here yet",
-                        systemImage: "figure.climbing",
-                        description: Text("Follow gyms, crags and climbers in Explore to fill your feed.")
-                    )
+                    ContentUnavailableView {
+                        Label {
+                            Text("Nothing here yet")
+                        } icon: {
+                            HoldMarkView(size: 56).foregroundStyle(.tint)
+                        }
+                    } description: {
+                        Text("Follow gyms, crags and climbers in Explore to fill your feed.")
+                    }
                     .padding(.top, 60)
                 } else {
                     LazyVStack(spacing: 12) {
@@ -31,11 +35,17 @@ struct HomeView: View {
                             Divider()
                         }
                     }
+                    BrandFooter(message: "You're all caught up")
                 }
             }
             .refreshable { await store.load() }
-            .navigationTitle("CHOSS")
+            // "Home" is what the back button says on pushed screens; the header shows the wordmark.
+            .navigationTitle("Home")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    WordmarkView(height: 24)
+                }
                 ToolbarItem(placement: .primaryAction) {
                     NavigationLink {
                         InboxView()

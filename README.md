@@ -28,6 +28,17 @@ Requires **Xcode 16+** and iOS 17+.
 
 The project uses Xcode's synchronized folders, so any file you add under `CHOSS/` is compiled automatically.
 
+## Brand
+
+The source logos live in `brand/`. `scripts/generate_brand_assets.py` (needs `pip install pillow numpy`) builds everything in the asset catalog from them:
+
+- **AppIcon:** the hold icon, full-bleed 1024×1024.
+- **Wordmark:** "CHOSS" in forest green, with a cream version for dark mode. Used as the Home header, the bottom-of-page footer, the splash screen, and profile setup.
+- **HoldMark / HoldMarkLarge:** the hold shape alone, as a tintable image. Used for the Home tab button, the splash screen, and the empty feed.
+- **Colors:** BrandGreen `#1D2A1E`, BrandCream `#F3EDE1`, the accent (forest green, lighter sage in dark mode), and OnAccent for text drawn on the accent.
+
+If the logos change, replace the files in `brand/` and re-run the script.
+
 ## Architecture
 
 ```
