@@ -17,10 +17,9 @@ struct PostCardView: View {
             reasonLabel
 
             header
-            SendVideoPlayer(post: post)
-                .onTapGesture(count: 2) {
-                    if !store.isLiked(post.id) { store.toggleLike(post.id) }
-                }
+            SendVideoPlayer(post: post) {
+                if !store.isLiked(post.id) { store.toggleLike(post.id) }
+            }
             actions
             details
         }
@@ -187,33 +186,86 @@ struct PostCardView: View {
     }
 }
 
+/// A list of posts opened from a grid or search result. It starts at the tapped post and
+/// lets you keep scrolling through the rest (like tapping a post on an Instagram profile).
+struct PostFeed: Hashable {
+    var title: String
+    var postIDs: [Post.ID]
+    var startID: Post.ID
+}
+
+struct PostFeedView: View {
+    @Environment(AppStore.self) private var store
+    let feed: PostFeed
+
+    @State private var position: Post.ID?
+
+    init(feed: PostFeed) {
+        self.feed = feed
+        _position = State(initialValue: feed.startID)
+    }
+
+    var body: some View {
+        let posts = feed.postIDs.compactMap { store.post($0) }
+
+        ScrollView {
+            LazyVStack(spacing: 12) {
+                ForEach(posts) { post in
+                    VStack(spacing: 12) {
+                        PostCardView(post: post)
+                        Divider()
+                    }
+                }
+            }
+            .scrollTargetLayout()
+        }
+        .scrollPosition(id: $position, anchor: .top)
+        .overlay {
+            if posts.isEmpty {
+                ContentUnavailableView("Post not found", systemImage: "questionmark.video")
+            }
+        }
+        .navigationTitle(feed.title)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// A single post opened from a link (e.g. shared in a DM). Opens on that post, then keeps
+/// going through the rest of the author's posts.
 struct PostDetailView: View {
     @Environment(AppStore.self) private var store
     let postID: Post.ID
 
     var body: some View {
-        ScrollView {
-            if let post = store.post(postID) {
-                PostCardView(post: post)
-            } else {
-                ContentUnavailableView("Post not found", systemImage: "questionmark.video")
-            }
+        PostFeedView(feed: feed)
+    }
+
+    private var feed: PostFeed {
+        guard let post = store.post(postID) else {
+            return PostFeed(title: "Send", postIDs: [], startID: postID)
         }
-        .navigationTitle("Send")
-        .navigationBarTitleDisplayMode(.inline)
+        var ids = store.posts(by: post.authorID).map(\.id)
+        if !ids.contains(postID) { ids.insert(postID, at: 0) }
+        let username = store.user(post.authorID)?.username ?? "Sends"
+        return PostFeed(title: username, postIDs: ids, startID: postID)
     }
 }
 
-/// 3-column grid of video thumbnails, like an Instagram profile.
+/// 3-column grid of video thumbnails, like an Instagram profile. Tapping one opens a
+/// scrollable feed of this grid's posts, starting at the tapped one.
 struct PostGrid: View {
     let posts: [Post]
+    /// Title for the feed opened from this grid, e.g. the username or "Trending".
+    var title: String = "Sends"
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 2), count: 3)
 
     var body: some View {
+        let ids = posts.map(\.id)
+
         LazyVGrid(columns: columns, spacing: 2) {
             ForEach(posts) { post in
-                NavigationLink(value: Route.post(post.id)) {
+                NavigationLink(value: Route.feed(PostFeed(title: title, postIDs: ids, startID: post.id))) {
                     Color.clear
                         .aspectRatio(4 / 5, contentMode: .fit)
                         .overlay { VideoThumbnailView(post: post) }

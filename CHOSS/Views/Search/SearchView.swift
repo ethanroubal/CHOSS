@@ -32,8 +32,16 @@ struct SearchView: View {
                         NavigationLink(value: Route.user(user.id)) { UserRow(user: user) }
                     }
                 case .sends:
-                    ForEach(store.searchPosts(query)) { post in
-                        NavigationLink(value: Route.post(post.id)) { SendRow(post: post) }
+                    // Opens a feed of all the results, starting at the tapped one.
+                    let results = store.searchPosts(query)
+                    ForEach(results) { post in
+                        NavigationLink(value: Route.feed(PostFeed(
+                            title: query.isEmpty ? "Trending" : "“\(query)”",
+                            postIDs: results.map(\.id),
+                            startID: post.id
+                        ))) {
+                            SendRow(post: post)
+                        }
                     }
                 }
             }

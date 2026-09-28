@@ -178,6 +178,8 @@ enum Route: Hashable {
     case user(User.ID)
     case post(Post.ID)
     case climb(Climb.ID)
+    /// A scrollable list of posts starting at one of them.
+    case feed(PostFeed)
 }
 
 extension View {
@@ -189,6 +191,7 @@ extension View {
             case .user(let id): ProfileView(userID: id)
             case .post(let id): PostDetailView(postID: id)
             case .climb(let id): ClimbDetailView(climbID: id)
+            case .feed(let feed): PostFeedView(feed: feed)
             }
         }
     }

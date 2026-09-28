@@ -51,14 +51,14 @@ struct ProfileView: View {
                         if sends.isEmpty {
                             ContentUnavailableView("No sends yet", systemImage: "video.slash")
                         } else {
-                            PostGrid(posts: sends)
+                            PostGrid(posts: sends, title: user.username)
                         }
                     case .reposts:
                         let reposted = store.repostedPosts(by: user.id)
                         if reposted.isEmpty {
                             ContentUnavailableView("No reposts yet", systemImage: "arrow.2.squarepath")
                         } else {
-                            PostGrid(posts: reposted)
+                            PostGrid(posts: reposted, title: "Reposted by \(user.username)")
                         }
                     case .places:
                         LazyVStack(alignment: .leading, spacing: 12) {

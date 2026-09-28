@@ -49,7 +49,8 @@ struct ExploreView: View {
                 Text("Trending sends")
                     .font(.title3.bold())
                     .padding(.horizontal)
-                PostGrid(posts: store.trendingPosts(discipline: discipline))
+                PostGrid(posts: store.trendingPosts(discipline: discipline),
+                         title: discipline.map { "Trending \($0.displayName)" } ?? "Trending")
                 BrandFooter()
             }
         }
