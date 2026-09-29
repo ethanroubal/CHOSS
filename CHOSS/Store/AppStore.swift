@@ -169,10 +169,25 @@ final class AppStore {
             .sorted { ($0.likedBy.count, $0.createdAt) > ($1.likedBy.count, $1.createdAt) }
     }
 
+    /// Most-followed first, then most sends, then alphabetical (most imported gyms have neither yet).
     func popularPlaces(kind: PlaceKind? = nil) -> [Place] {
-        places.values
+        // Count once up front: with ~1,500 places, counting inside the sort would be slow.
+        var followers: [Place.ID: Int] = [:]
+        for followed in followedPlaces.values {
+            for id in followed { followers[id, default: 0] += 1 }
+        }
+        var sends: [Place.ID: Int] = [:]
+        for post in posts {
+            if let id = post.placeID { sends[id, default: 0] += 1 }
+        }
+        return places.values
             .filter { kind == nil || $0.kind == kind }
-            .sorted { followerCount(of: $0.id) > followerCount(of: $1.id) }
+            .sorted { lhs, rhs in
+                let l = (followers[lhs.id] ?? 0, sends[lhs.id] ?? 0)
+                let r = (followers[rhs.id] ?? 0, sends[rhs.id] ?? 0)
+                if l != r { return l > r }
+                return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+            }
     }
 
     // MARK: - Follow graph

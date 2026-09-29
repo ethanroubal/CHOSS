@@ -13,6 +13,17 @@ struct ExploreView: View {
     @State private var mode: Mode = .sends
     @State private var discipline: ClimbDiscipline?
     @State private var selectedPlaceID: Place.ID?
+    /// Starts over the continental US; updated as you pan / zoom.
+    @State private var mapCamera: MapCameraPosition = .region(Self.continentalUS)
+    @State private var visibleRegion: MKCoordinateRegion = Self.continentalUS
+
+    private static let continentalUS = MKCoordinateRegion(
+        center: CLLocationCoordinate2D(latitude: 39.5, longitude: -98.35),
+        span: MKCoordinateSpan(latitudeDelta: 30, longitudeDelta: 60)
+    )
+    /// Drawing ~1,500 markers at once makes the map sluggish, so only the most-followed places
+    /// in view are drawn; zoom in to see the rest.
+    private static let maxMarkers = 250
 
     var body: some View {
         NavigationStack {
@@ -46,8 +57,8 @@ struct ExploreView: View {
             VStack(alignment: .leading, spacing: 16) {
                 disciplineChips
 
-                placeCarousel(title: "Popular gyms", places: store.popularPlaces(kind: .gym))
-                placeCarousel(title: "Popular crags", places: store.popularPlaces(kind: .crag))
+                placeCarousel(title: "Popular gyms", places: Array(store.popularPlaces(kind: .gym).prefix(15)))
+                placeCarousel(title: "Popular crags", places: Array(store.popularPlaces(kind: .crag).prefix(15)))
 
                 Text("Trending sends")
                     .font(.title3.bold())
@@ -103,8 +114,8 @@ struct ExploreView: View {
     // MARK: Map
 
     private var mapView: some View {
-        Map(selection: $selectedPlaceID) {
-            ForEach(store.allPlaces) { place in
+        Map(position: $mapCamera, selection: $selectedPlaceID) {
+            ForEach(placesOnMap) { place in
                 Marker(place.name, systemImage: place.kind.symbolName, coordinate: place.coordinate)
                     .tint(place.kind == .gym ? Color.accentColor : Color.green)
                     .tag(place.id)
@@ -113,6 +124,9 @@ struct ExploreView: View {
         .mapControls {
             MapUserLocationButton()
             MapCompass()
+        }
+        .onMapCameraChange(frequency: .onEnd) { context in
+            visibleRegion = context.region
         }
         .safeAreaInset(edge: .bottom) {
             if let place = store.place(selectedPlaceID) {
@@ -125,6 +139,27 @@ struct ExploreView: View {
                 .padding()
             }
         }
+    }
+}
+
+extension ExploreView {
+    /// Places inside the visible map area, most-followed first, capped at `maxMarkers`.
+    /// The selected place is always kept so its card doesn't disappear.
+    fileprivate var placesOnMap: [Place] {
+        let region = visibleRegion
+        let minLat = region.center.latitude - region.span.latitudeDelta / 2
+        let maxLat = region.center.latitude + region.span.latitudeDelta / 2
+        let minLon = region.center.longitude - region.span.longitudeDelta / 2
+        let maxLon = region.center.longitude + region.span.longitudeDelta / 2
+        var shown = Array(
+            store.popularPlaces()
+                .filter { $0.latitude >= minLat && $0.latitude <= maxLat && $0.longitude >= minLon && $0.longitude <= maxLon }
+                .prefix(Self.maxMarkers)
+        )
+        if let selected = store.place(selectedPlaceID), !shown.contains(selected) {
+            shown.append(selected)
+        }
+        return shown
     }
 }
 

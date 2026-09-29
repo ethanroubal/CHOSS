@@ -5,7 +5,12 @@ import Foundation
 enum SampleData {
     static let currentUserID: User.ID = "u_sam"
 
-    static let places: [Place] = [
+    /// Sample gyms/crags used by the demo posts, plus every gym in the bundled US gym list.
+    static let places: [Place] = featuredPlaces + BundledGyms.places.filter { gym in
+        !featuredPlaces.contains { $0.id == gym.id }
+    }
+
+    private static let featuredPlaces: [Place] = [
         Place(id: "p_granite_works", name: "Granite Works Climbing", kind: .gym,
               city: "Brooklyn", region: "NY", country: "USA",
               latitude: 40.6782, longitude: -73.9942,
