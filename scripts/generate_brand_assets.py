@@ -11,6 +11,7 @@ Writes into CHOSS/Assets.xcassets:
   Wordmark     "CHOSS" on transparent: forest green in light mode, cream in dark mode
   BrandGreen / BrandCream color sets
   DisciplineBoulder / Sport / Trad / TopRope  climbing-type icons (from discipline-icons-source.png)
+  ExploreMark  the Explore tab icon (from explore-icon-source.png)
 """
 import json
 from pathlib import Path
@@ -259,6 +260,48 @@ def discipline_icons():
         })
 
 
+# --- Explore tab icon -----------------------------------------------------------
+
+def explore_mark():
+    """The boulderer-with-crash-pad figure from brand/explore-icon-source.png, without its
+    "EXPLORE" label, as a 25pt template image for the tab bar."""
+    src = np.asarray(Image.open(BRAND / "explore-icon-source.png").convert("L")).astype(float)
+    alpha = np.clip((200 - src) / 100, 0, 1)
+    # Keep the tallest band of ink (the figure); the label is a separate, shorter band below it.
+    ink_rows = np.where(alpha.max(axis=1) > 0.5)[0]
+    bands, start, prev = [], ink_rows[0], ink_rows[0]
+    for r in ink_rows[1:]:
+        if r > prev + 8:
+            bands.append((start, prev))
+            start = r
+        prev = r
+    bands.append((start, prev))
+    top, bottom = max(bands, key=lambda b: b[1] - b[0])
+    figure = alpha[top:bottom + 1]
+    cols = np.where(figure.max(axis=0) > 0.02)[0]
+    figure = figure[:, cols[0]:cols[-1] + 1]
+    side = max(figure.shape)
+    canvas = np.zeros((side, side))
+    oy, ox = (side - figure.shape[0]) // 2, (side - figure.shape[1]) // 2
+    canvas[oy:oy + figure.shape[0], ox:ox + figure.shape[1]] = figure
+    rgba = np.zeros((side, side, 4), dtype=np.uint8)
+    rgba[..., 3] = (canvas * 255).round().astype(np.uint8)
+    img = Image.fromarray(rgba, "RGBA")
+
+    folder = ASSETS / "ExploreMark.imageset"
+    folder.mkdir(parents=True, exist_ok=True)
+    images = []
+    for scale in (1, 2, 3):  # 25pt, the standard tab-bar glyph size
+        name = f"explore-mark@{scale}x.png"
+        img.resize((25 * scale, 25 * scale), Image.LANCZOS).save(folder / name, optimize=True)
+        images.append({"filename": name, "idiom": "universal", "scale": f"{scale}x"})
+    write_contents(folder, {
+        "images": images,
+        "info": {"author": "xcode", "version": 1},
+        "properties": {"template-rendering-intent": "template"},
+    })
+
+
 if __name__ == "__main__":
     wordmark()
     square, outside = icon_square()
@@ -267,4 +310,5 @@ if __name__ == "__main__":
     hold_mark(square)
     colors()
     discipline_icons()
+    explore_mark()
     print("Brand assets written to", ASSETS)

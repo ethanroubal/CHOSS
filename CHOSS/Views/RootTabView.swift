@@ -25,7 +25,14 @@ struct RootTabView: View {
                     }
                     .tag(Tab.home)
                 ExploreView()
-                    .tabItem { Label("Explore", systemImage: "safari") }
+                    .tabItem {
+                        // Boulderer carrying a crash pad, heading out to explore.
+                        Label {
+                            Text("Explore")
+                        } icon: {
+                            Image("ExploreMark")
+                        }
+                    }
                     .tag(Tab.explore)
                 Color.clear
                     .tabItem { Label("Post", systemImage: "plus.app") }
