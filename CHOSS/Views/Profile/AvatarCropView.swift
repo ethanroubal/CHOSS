@@ -12,9 +12,10 @@ struct AvatarCropView: View {
     @State private var zoom: CGFloat = 1
     /// Offset of the photo's center from the circle's center, in points.
     @State private var offset: CGSize = .zero
-    /// Zoom and offset when the current gesture began. Every frame is computed from these
-    /// (not from the previous frame), so small errors can't accumulate into jitter.
-    @State private var gestureStart: (zoom: CGFloat, offset: CGSize)?
+    /// Last pinch / drag values seen during the current gesture, to apply changes as small steps.
+    @State private var lastMagnification: CGFloat?
+    @State private var lastTranslation: CGSize?
+    @State private var isInteracting = false
     /// Diameter of the framing circle, measured from the crop area.
     @State private var circleSide: CGFloat = 0
     @State private var showsConfirm = true
@@ -55,57 +56,62 @@ struct AvatarCropView: View {
     }
 
     private var cropArea: some View {
-        let scale = displayScale
-
-        return ZStack {
-            Image(uiImage: image)
-                .resizable()
-                .interpolation(.high)
-                .frame(width: image.size.width * scale, height: image.size.height * scale)
-                .offset(offset)
-
-            // Dim everything outside the circle, and outline it.
-            Rectangle()
-                .fill(.black.opacity(0.6))
-                .mask {
-                    Rectangle()
-                        .overlay {
-                            Circle()
-                                .frame(width: circleSide, height: circleSide)
-                                .blendMode(.destinationOut)
-                        }
-                        .compositingGroup()
-                }
-                .allowsHitTesting(false)
-            Circle()
-                .stroke(.white.opacity(0.9), lineWidth: 1.5)
-                .frame(width: circleSide, height: circleSide)
-                .allowsHitTesting(false)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // Keep the (large) photo inside this area so it never covers the buttons.
-        .clipped()
-        .contentShape(Rectangle())
-        .onGeometryChange(for: CGFloat.self) { proxy in
-            max(min(proxy.size.width, proxy.size.height) - circleInset * 2, 0)
-        } action: { side in
-            circleSide = side
-            offset = clamped(offset, zoom: zoom)
-        }
-        .gesture(frameGesture)
-        .onTapGesture(count: 2) {
-            // Double-tap toggles between filling the circle and 2x.
-            withAnimation(.snappy) {
-                if zoom > 1.01 {
-                    zoom = 1
-                    offset = .zero
-                } else {
-                    zoom = 2
-                    offset = clamped(CGSize(width: offset.width * 2, height: offset.height * 2), zoom: 2)
+        // The area is a fixed-size clear view; the photo and circle are overlays, so the photo's
+        // (zoomed, often much larger) size can never change the layout or the circle size.
+        Color.clear
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                max(min(proxy.size.width, proxy.size.height) - circleInset * 2, 0)
+            } action: { side in
+                circleSide = side
+                offset = clamped(offset, zoom: zoom)
+            }
+            .overlay {
+                if circleSide > 0 {
+                    Image(uiImage: image)
+                        .resizable()
+                        .interpolation(.high)
+                        .frame(width: image.size.width * displayScale, height: image.size.height * displayScale)
+                        .offset(offset)
+                        .allowsHitTesting(false)
                 }
             }
-            scheduleConfirm()
-        }
+            .overlay {
+                // Dim everything outside the circle, and outline it.
+                ZStack {
+                    Rectangle()
+                        .fill(.black.opacity(0.6))
+                        .mask {
+                            Rectangle()
+                                .overlay {
+                                    Circle()
+                                        .frame(width: circleSide, height: circleSide)
+                                        .blendMode(.destinationOut)
+                                }
+                                .compositingGroup()
+                        }
+                    Circle()
+                        .stroke(.white.opacity(0.9), lineWidth: 1.5)
+                        .frame(width: circleSide, height: circleSide)
+                }
+                .allowsHitTesting(false)
+            }
+            .clipped()
+            .contentShape(Rectangle())
+            .gesture(frameGesture)
+            .onTapGesture(count: 2) {
+                // Double-tap toggles between filling the circle and 2x.
+                withAnimation(.snappy) {
+                    if zoom > 1.01 {
+                        zoom = 1
+                        offset = .zero
+                    } else {
+                        zoom = 2
+                        offset = clamped(CGSize(width: offset.width * 2, height: offset.height * 2), zoom: 2)
+                    }
+                }
+                scheduleConfirm()
+            }
     }
 
     /// Pops up when you stop moving the photo.
@@ -145,30 +151,53 @@ struct AvatarCropView: View {
 
     // MARK: - Gesture
 
-    /// Pinch and drag handled as one gesture, so they can't fight each other.
+    /// Pinch and drag handled as one gesture, applied as small per-frame steps:
+    /// - zoom changes only while two fingers are pinching (a finger lifting early doesn't snap it back),
+    /// - zoom keeps whatever is in the middle of the circle in place,
+    /// - big jumps in the drag (when a finger is added or lifted) are ignored.
     private var frameGesture: some Gesture {
         SimultaneousGesture(MagnifyGesture(), DragGesture(minimumDistance: 2))
             .onChanged { value in
-                if gestureStart == nil {
-                    gestureStart = (zoom, offset)
+                if !isInteracting {
+                    isInteracting = true
                     hideConfirm()
                 }
-                guard let start = gestureStart else { return }
+                var newZoom = zoom
+                var newOffset = offset
 
-                let magnification = value.first?.magnification ?? 1
-                let newZoom = min(max(start.zoom * magnification, 1), maxZoom)
-                // Scale the offset with the zoom so whatever is in the middle of the circle
-                // stays put while pinching, then add the finger movement.
-                let ratio = newZoom / start.zoom
-                let translation = value.second?.translation ?? .zero
-                let proposed = CGSize(width: start.offset.width * ratio + translation.width,
-                                      height: start.offset.height * ratio + translation.height)
+                if let magnification = value.first?.magnification {
+                    if let previous = lastMagnification, previous > 0 {
+                        let proposed = min(max(zoom * magnification / previous, 1), maxZoom)
+                        let ratio = proposed / zoom
+                        newOffset = CGSize(width: newOffset.width * ratio, height: newOffset.height * ratio)
+                        newZoom = proposed
+                    }
+                    lastMagnification = magnification
+                } else {
+                    lastMagnification = nil
+                }
+
+                if let translation = value.second?.translation {
+                    if let previous = lastTranslation {
+                        let dx = translation.width - previous.width
+                        let dy = translation.height - previous.height
+                        if dx * dx + dy * dy < 60 * 60 {
+                            newOffset.width += dx
+                            newOffset.height += dy
+                        }
+                    }
+                    lastTranslation = translation
+                } else {
+                    lastTranslation = nil
+                }
 
                 zoom = newZoom
-                offset = clamped(proposed, zoom: newZoom)
+                offset = clamped(newOffset, zoom: newZoom)
             }
             .onEnded { _ in
-                gestureStart = nil
+                lastMagnification = nil
+                lastTranslation = nil
+                isInteracting = false
                 scheduleConfirm()
             }
     }
@@ -183,7 +212,7 @@ struct AvatarCropView: View {
         confirmTask?.cancel()
         confirmTask = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(350))
-            guard !Task.isCancelled, gestureStart == nil else { return }
+            guard !Task.isCancelled, !isInteracting else { return }
             withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { showsConfirm = true }
         }
     }
