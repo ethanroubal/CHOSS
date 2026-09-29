@@ -269,9 +269,18 @@ struct PostDetailView: View {
 /// 3-column grid of video thumbnails, like an Instagram profile. Tapping one opens a
 /// scrollable feed of this grid's posts, starting at the tapped one.
 struct PostGrid: View {
+    /// What each thumbnail shows in its corner.
+    enum Badge {
+        /// The climb's grade (top right), e.g. on profiles where climbs differ.
+        case grade
+        /// The like count (bottom left), e.g. on a climb page where every video is the same climb.
+        case likes
+    }
+
     let posts: [Post]
     /// Title for the feed opened from this grid, e.g. the username or "Trending".
     var title: String = "Sends"
+    var badge: Badge = .grade
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 2), count: 3)
 
@@ -285,9 +294,21 @@ struct PostGrid: View {
                         .aspectRatio(4 / 5, contentMode: .fit)
                         .overlay { VideoThumbnailView(post: post) }
                         .clipped()
-                        // Grade in the corner, only when the poster set one.
-                        .overlay(alignment: .topTrailing) {
-                            PostGradeBadge(post: post).padding(5)
+                        .overlay(alignment: badge == .grade ? .topTrailing : .bottomLeading) {
+                            switch badge {
+                            case .grade:
+                                // The climb's grade, when it has one.
+                                PostGradeBadge(post: post).padding(5)
+                            case .likes:
+                                Label("\(post.likedBy.count)", systemImage: "heart.fill")
+                                    .font(.caption2.bold())
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 3)
+                                    .background(.black.opacity(0.5), in: Capsule())
+                                    .padding(5)
+                                    .accessibilityLabel("\(post.likedBy.count) likes")
+                            }
                         }
                 }
                 .buttonStyle(.plain)

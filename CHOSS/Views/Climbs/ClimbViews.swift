@@ -60,7 +60,7 @@ struct ClimbDetailView: View {
     let climbID: Climb.ID
 
     private enum Sort: String, CaseIterable, Identifiable {
-        case newest = "Newest"
+        case newest = "Most recent"
         case mostLiked = "Most liked"
         var id: Self { self }
     }
@@ -170,10 +170,14 @@ struct ClimbDetailView: View {
 
     @ViewBuilder
     private func videos(_ climb: Climb) -> some View {
-        let sends = store.posts(ofClimb: climb.id)
+        let sends = store.posts(ofClimb: climb.id)  // newest first
         let sorted = sort == .newest
             ? sends
-            : sends.sorted { $0.likedBy.count > $1.likedBy.count }
+            : sends.sorted { lhs, rhs in
+                lhs.likedBy.count != rhs.likedBy.count
+                    ? lhs.likedBy.count > rhs.likedBy.count
+                    : lhs.createdAt > rhs.createdAt
+            }
 
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -182,7 +186,8 @@ struct ClimbDetailView: View {
                 Picker("Sort", selection: $sort) {
                     ForEach(Sort.allCases) { Text($0.rawValue).tag($0) }
                 }
-                .pickerStyle(.menu)
+                .pickerStyle(.segmented)
+                .fixedSize()
             }
             .padding(.horizontal)
 
@@ -193,12 +198,9 @@ struct ClimbDetailView: View {
                     description: Text("Nobody has posted a video of \(climb.name) yet. Be the first!")
                 )
             } else {
-                LazyVStack(spacing: 12) {
-                    ForEach(sorted) { post in
-                        PostCardView(post: post)
-                        Divider()
-                    }
-                }
+                // Grid like a profile; tapping opens a scrollable feed in this order,
+                // starting at the tapped video.
+                PostGrid(posts: sorted, title: "\(climb.name) · \(sort.rawValue)", badge: .likes)
             }
         }
     }
