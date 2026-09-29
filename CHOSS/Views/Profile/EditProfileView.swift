@@ -35,7 +35,7 @@ struct EditProfileView: View {
     init() {
         mode = .setup
         _user = State(initialValue: User(id: "u_\(UUID().uuidString)", username: "", displayName: "",
-                                         bio: "", homePlaceID: nil))
+                                         bio: ""))
     }
 
     var body: some View {
@@ -65,13 +65,13 @@ struct EditProfileView: View {
                     TextField("Bio", text: $user.bio, axis: .vertical)
                         .lineLimit(2...4)
                     NavigationLink {
-                        PlacePickerView(selection: $user.homePlaceID,
-                                        title: "Home gym / crag",
-                                        noneLabel: "No home gym / crag")
+                        HomePlacesPickerView(selection: $user.homePlaceIDs)
                     } label: {
-                        LabeledContent("Home gym / crag") {
-                            Text(store.place(user.homePlaceID)?.name ?? "Choose")
-                                .foregroundStyle(user.homePlaceID == nil ? HierarchicalShapeStyle.secondary : HierarchicalShapeStyle.primary)
+                        LabeledContent("Home gyms / crags") {
+                            Text(homePlacesSummary)
+                                .foregroundStyle(user.homePlaceIDs.isEmpty
+                                                 ? HierarchicalShapeStyle.secondary : HierarchicalShapeStyle.primary)
+                                .lineLimit(1)
                         }
                     }
                 }
@@ -126,6 +126,12 @@ struct EditProfileView: View {
                 Text(error ?? "")
             }
         }
+    }
+
+    /// "Granite Works, Buttermilk Boulders" or "Choose up to 3".
+    private var homePlacesSummary: String {
+        let names = user.homePlaceIDs.compactMap { store.place($0)?.name }
+        return names.isEmpty ? "Choose up to \(User.maxHomePlaces)" : names.joined(separator: ", ")
     }
 
     /// Tap the avatar (or "Add photo") to pick a picture, then frame it.

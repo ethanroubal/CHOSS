@@ -140,10 +140,25 @@ struct ProfileView: View {
             if !user.bio.isEmpty {
                 Text(user.bio).font(.subheadline)
             }
-            if let home = store.place(user.homePlaceID) {
-                NavigationLink(value: Route.place(home.id)) {
-                    Label("Home: \(home.name)", systemImage: home.kind.symbolName)
-                        .font(.subheadline)
+            let homes = user.homePlaceIDs.compactMap { store.place($0) }
+            if !homes.isEmpty {
+                // Home gyms / crags as tappable chips.
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        Text("Home").font(.subheadline).foregroundStyle(.secondary)
+                        ForEach(homes) { home in
+                            NavigationLink(value: Route.place(home.id)) {
+                                Label(home.name, systemImage: home.kind.symbolName)
+                                    .font(.caption.bold())
+                                    .lineLimit(1)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
+                                    .background(Color.accentColor.opacity(0.15), in: Capsule())
+                                    .foregroundStyle(.tint)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
                 }
             }
             let hardest = store.hardestGrades(for: user.id)

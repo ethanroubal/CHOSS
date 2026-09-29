@@ -7,7 +7,8 @@ struct User: Identifiable, Codable, Hashable {
     var username: String
     var displayName: String
     var bio: String
-    var homePlaceID: Place.ID?
+    /// Up to `maxHomePlaces` home gyms / crags, in the order the climber picked them.
+    var homePlaceIDs: [Place.ID] = []
     var avatarURL: URL? = nil
     /// Self-reported bouldering level, e.g. V4–V6.
     var boulderRange: GradeRange? = nil
@@ -20,6 +21,8 @@ struct User: Identifiable, Codable, Hashable {
     var visibleGradeRanges: [GradeRange] {
         showsGradeRange ? [boulderRange, ropeRange].compactMap { $0 } : []
     }
+
+    static let maxHomePlaces = 3
 
     var initials: String {
         let parts = displayName.split(separator: " ").prefix(2)

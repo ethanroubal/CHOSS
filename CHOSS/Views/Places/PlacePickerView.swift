@@ -85,6 +85,119 @@ struct PlacePickerView: View {
     }
 }
 
+/// Pick up to `User.maxHomePlaces` home gyms / crags. Tap to toggle; once the limit is reached,
+/// other places are disabled until one is removed.
+struct HomePlacesPickerView: View {
+    @Environment(AppStore.self) private var store
+    @Binding var selection: [Place.ID]
+
+    @State private var query = ""
+    @State private var addingPlace = false
+
+    private let limit = User.maxHomePlaces
+    private var isFull: Bool { selection.count >= limit }
+
+    var body: some View {
+        List {
+            Section {
+                if selection.isEmpty {
+                    Text("None yet. Pick from the list below.")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(selection, id: \.self) { id in
+                    if let place = store.place(id) {
+                        PlaceRow(place: place)
+                    }
+                }
+                .onDelete { selection.remove(atOffsets: $0) }
+                .onMove { selection.move(fromOffsets: $0, toOffset: $1) }
+            } header: {
+                Text("Your home spots (\(selection.count)/\(limit))")
+            } footer: {
+                Text(isFull
+                     ? "That's the maximum. Swipe one away to pick another."
+                     : "Pick up to \(limit). Swipe to remove, drag to reorder.")
+            }
+
+            Section(query.isEmpty ? "Your places" : "Results") {
+                ForEach(Array(results.enumerated()), id: \.element.id) { index, place in
+                    let isSelected = selection.contains(place.id)
+                    Button {
+                        toggle(place.id)
+                    } label: {
+                        HStack {
+                            PlaceRow(place: place)
+                            if index == 0 && !query.isEmpty {
+                                Text("Best match")
+                                    .font(.caption2.bold())
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.accentColor.opacity(0.15), in: Capsule())
+                                    .foregroundStyle(.tint)
+                            }
+                            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                                .font(.title3)
+                                .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isFull && !isSelected)
+                    .opacity(isFull && !isSelected ? 0.4 : 1)
+                    .accessibilityAddTraits(isSelected ? .isSelected : [])
+                }
+            }
+
+            Section {
+                Button {
+                    addingPlace = true
+                } label: {
+                    Label("Can't find it? Add a gym or crag", systemImage: "plus.circle")
+                }
+                .disabled(isFull)
+            }
+        }
+        .navigationTitle("Home gyms / crags")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if selection.count > 1 {
+                EditButton()
+            }
+        }
+        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
+                    prompt: "Search gyms and crags by name or town")
+        .autocorrectionDisabled()
+        .onSubmit(of: .search) {
+            // Return adds the best match.
+            if let best = results.first, !query.isEmpty, !selection.contains(best.id), !isFull {
+                selection.append(best.id)
+                query = ""
+            }
+        }
+        .sheet(isPresented: $addingPlace) {
+            AddPlaceView(suggestedName: query) { newID in
+                if !isFull && !selection.contains(newID) { selection.append(newID) }
+            }
+        }
+    }
+
+    private func toggle(_ id: Place.ID) {
+        if let index = selection.firstIndex(of: id) {
+            selection.remove(at: index)
+        } else if !isFull {
+            selection.append(id)
+        }
+    }
+
+    /// With no query, followed places come first.
+    private var results: [Place] {
+        guard query.isEmpty else { return store.searchPlaces(query) }
+        let followed = store.followedPlaces(of: store.currentUserID)
+        let others = store.allPlaces.filter { !followed.contains($0) }
+        return followed + others
+    }
+}
+
 /// User-submitted place. Shows as unverified until reviewed (see docs/PLACES_DATA_STRATEGY.md).
 struct AddPlaceView: View {
     @Environment(AppStore.self) private var store

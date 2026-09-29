@@ -45,23 +45,23 @@ enum SampleData {
 
     static let users: [User] = [
         User(id: "u_sam", username: "sam.sends", displayName: "Sam Rivera",
-             bio: "Plastic puller, occasional crag rat. Projecting V7.", homePlaceID: "p_granite_works",
+             bio: "Plastic puller, occasional crag rat. Projecting V7.", homePlaceIDs: ["p_granite_works", "p_buttermilks"],
              boulderRange: GradeRange(system: .vScale, low: "V5", high: "V6"),
              ropeRange: GradeRange(system: .yds, low: "5.11b", high: "5.11d")),
         User(id: "u_alex", username: "alexcrimps", displayName: "Alex Chen",
-             bio: "Crimps > slopers. Route setter.", homePlaceID: "p_granite_works",
+             bio: "Crimps > slopers. Route setter.", homePlaceIDs: ["p_granite_works", "p_high_point"],
              boulderRange: GradeRange(system: .vScale, low: "V7", high: "V8")),
         User(id: "u_jess", username: "jess_on_rock", displayName: "Jess Okafor",
-             bio: "Sport climbing and road trips.", homePlaceID: "p_rrg",
+             bio: "Sport climbing and road trips.", homePlaceIDs: ["p_rrg"],
              ropeRange: GradeRange(system: .yds, low: "5.12a", high: "5.12b")),
         User(id: "u_marco", username: "marco.boulders", displayName: "Marco Rossi",
-             bio: "Font every winter.", homePlaceID: "p_font",
+             bio: "Font every winter.", homePlaceIDs: ["p_font"],
              boulderRange: GradeRange(system: .font, low: "7A", high: "7B"), showsGradeRange: false),
         User(id: "u_priya", username: "priyaclimbs", displayName: "Priya Nair",
-             bio: "Highball enjoyer.", homePlaceID: "p_buttermilks",
+             bio: "Highball enjoyer.", homePlaceIDs: ["p_buttermilks", "p_crux_collective", "p_yosemite"],
              boulderRange: GradeRange(system: .vScale, low: "V6", high: nil)),
         User(id: "u_kenji", username: "kenji_k", displayName: "Kenji Watanabe",
-             bio: "Trad dad. Cracks only.", homePlaceID: "p_yosemite"),
+             bio: "Trad dad. Cracks only.", homePlaceIDs: ["p_yosemite"]),
     ]
 
     // Placeholder clips until real uploads exist.

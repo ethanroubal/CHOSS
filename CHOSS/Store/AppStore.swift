@@ -378,8 +378,16 @@ final class AppStore {
     func updateProfile(_ user: User) {
         guard user.id == currentUserID else { return }
         users[user.id] = user
+        followHomePlaces(of: user)
         perform { [repository] in
             try await repository.saveUser(user)
+        }
+    }
+
+    /// Your home gyms / crags are always in your feed.
+    private func followHomePlaces(of user: User) {
+        for home in user.homePlaceIDs where !isFollowing(place: home) {
+            toggleFollow(place: home)
         }
     }
 
@@ -393,9 +401,7 @@ final class AppStore {
             try await repository.saveUser(user)
             users[user.id] = user
             currentUserID = user.id
-            if let home = user.homePlaceID, !isFollowing(place: home) {
-                toggleFollow(place: home)
-            }
+            followHomePlaces(of: user)
             return true
         } catch {
             lastError = error.localizedDescription
