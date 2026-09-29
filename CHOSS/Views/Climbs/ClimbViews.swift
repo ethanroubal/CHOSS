@@ -8,7 +8,7 @@ struct ClimbRow: View {
     var isBestMatch = false
 
     var body: some View {
-        let videos = store.posts(ofClimb: climb.id).count
+        let videos = store.postCount(ofClimb: climb.id)
 
         HStack(spacing: 12) {
             DisciplineIcon(discipline: climb.discipline, size: 26)
@@ -397,6 +397,8 @@ struct CragPickerView: View {
     @Binding var selection: Place.ID?
 
     @State private var query = ""
+    @State private var search = SearchResults()
+    @State private var pageLimit = Paging.pageSize
 
     var body: some View {
         let results = crags
@@ -426,10 +428,13 @@ struct CragPickerView: View {
                     }
                     .buttonStyle(.plain)
                 }
+                if cragIDs.count > pageLimit {
+                    LoadMoreRow { pageLimit += Paging.pageSize }
+                }
             }
         }
         .overlay {
-            if results.isEmpty && !query.isEmpty {
+            if search.isEmpty(for: query) {
                 ContentUnavailableView.search(text: query)
             }
         }
@@ -438,21 +443,30 @@ struct CragPickerView: View {
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
                     prompt: "Search crags by name or town")
         .autocorrectionDisabled()
+        .runSearch(query, version: store.searchIndexVersion, into: $search) { [store] text in
+            await store.searchPlaceIDs(text, kind: .crag)
+        }
+        .onChange(of: query) { pageLimit = Paging.pageSize }
         .onSubmit(of: .search) {
-            if let best = results.first, !query.isEmpty {
-                selection = best.id
-                dismiss()
+            let text = query
+            guard !SearchResults.clean(text).isEmpty else { return }
+            Task {
+                if let best = await store.searchPlaceIDs(text, kind: .crag, limit: 1).first {
+                    selection = best
+                    dismiss()
+                }
             }
         }
     }
 
+    private var cragIDs: [Place.ID] {
+        guard SearchResults.clean(query).isEmpty else { return Array(search.ids.prefix(pageLimit + 1)) }
+        let followed = store.followedPlaces(of: store.currentUserID).filter { $0.kind == .crag }.map(\.id)
+        return Paging.page(followed, then: store.popularPlaceIDs(kind: .crag), limit: pageLimit)
+    }
+
     private var crags: [Place] {
-        guard query.trimmingCharacters(in: .whitespaces).isEmpty else {
-            return store.searchPlaces(query).filter { $0.kind == .crag }
-        }
-        let followed = store.followedPlaces(of: store.currentUserID).filter { $0.kind == .crag }
-        let others = store.popularPlaces(kind: .crag).filter { !followed.contains($0) }
-        return followed + others
+        cragIDs.prefix(pageLimit).compactMap { store.place($0) }
     }
 }
 

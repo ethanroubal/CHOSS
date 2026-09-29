@@ -95,7 +95,7 @@ struct PlaceDetailView: View {
         VStack(spacing: 12) {
             HStack {
                 StatView(value: store.followerCount(of: place.id), label: "Followers")
-                StatView(value: store.posts(at: place.id).count, label: "Sends")
+                StatView(value: store.postCount(at: place.id), label: "Sends")
                 StatView(value: Set(store.posts(at: place.id).map(\.authorID)).count, label: "Climbers")
                 if place.kind == .crag {
                     StatView(value: store.climbs(at: place.id).count, label: "Climbs")

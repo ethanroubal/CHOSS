@@ -57,8 +57,8 @@ struct ExploreView: View {
             VStack(alignment: .leading, spacing: 16) {
                 disciplineChips
 
-                placeCarousel(title: "Popular gyms", places: Array(store.popularPlaces(kind: .gym).prefix(15)))
-                placeCarousel(title: "Popular crags", places: Array(store.popularPlaces(kind: .crag).prefix(15)))
+                placeCarousel(title: "Popular gyms", places: store.popularPlaceIDs(kind: .gym).prefix(15).compactMap { store.place($0) })
+                placeCarousel(title: "Popular crags", places: store.popularPlaceIDs(kind: .crag).prefix(15).compactMap { store.place($0) })
 
                 Text("Trending sends")
                     .font(.title3.bold())
@@ -156,11 +156,15 @@ extension ExploreView {
         let maxLat = region.center.latitude + region.span.latitudeDelta / 2
         let minLon = region.center.longitude - region.span.longitudeDelta / 2
         let maxLon = region.center.longitude + region.span.longitudeDelta / 2
-        var shown = Array(
-            store.popularPlaces()
-                .filter { $0.latitude >= minLat && $0.latitude <= maxLat && $0.longitude >= minLon && $0.longitude <= maxLon }
-                .prefix(Self.maxMarkers)
-        )
+        // Walks the (cached) popularity order and stops once the marker cap is reached.
+        var shown: [Place] = []
+        for id in store.popularPlaceIDs() {
+            if shown.count >= Self.maxMarkers { break }
+            guard let place = store.place(id),
+                  place.latitude >= minLat, place.latitude <= maxLat,
+                  place.longitude >= minLon, place.longitude <= maxLon else { continue }
+            shown.append(place)
+        }
         if let selected = store.place(selectedPlaceID), !shown.contains(selected) {
             shown.append(selected)
         }

@@ -193,7 +193,7 @@ struct PlaceRow: View {
                 }
                 Text("\(place.kind.displayName) · \(place.locationLine)")
                     .font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
-                Text("\(store.followerCount(of: place.id)) followers · \(store.posts(at: place.id).count) sends")
+                Text("\(store.followerCount(of: place.id)) followers · \(store.postCount(at: place.id)) sends")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)

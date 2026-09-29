@@ -11,6 +11,11 @@ extension AppStore {
     /// Identifies "the same climb" across posts: the linked outdoor climb, or (for gym climbs and
     /// unlinked sends) the same route name at the same place. nil if the post can't be grouped.
     func climbKey(for post: Post) -> String? {
+        climbKeyByPost[post.id] ?? computeClimbKey(for: post)
+    }
+
+    /// Uncached `climbKey(for:)`, used when building the lookups.
+    func computeClimbKey(for post: Post) -> String? {
         if let climbID = post.climbID { return "climb:\(climbID)" }
         let name = NameMatcher.normalize(post.routeName)
         guard !name.isEmpty else { return nil }
@@ -21,8 +26,8 @@ extension AppStore {
 
     /// Every post of the same climb as `post` (including itself).
     func postsOfSameClimb(as post: Post) -> [Post] {
-        guard let key = climbKey(for: post) else { return [post] }
-        return posts.filter { climbKey(for: $0) == key }
+        guard let key = climbKey(for: post), let ids = postIDsByClimbKey[key] else { return [post] }
+        return ids.compactMap { self.post($0) }
     }
 
     /// Average of a set of proposed grades: the mean position on the scale, rounded to the nearest
@@ -73,9 +78,11 @@ extension AppStore {
     /// Routes already posted at a place (not linked to an outdoor climb), most-posted first.
     /// With no place, it's the current user's own untagged routes.
     func knownRoutes(at placeID: Place.ID?) -> [KnownRoute] {
-        let candidates = posts.filter { post in
+        // Only this place's posts (or your own), not every post.
+        let pool = placeID.map { posts(at: $0) } ?? posts(by: currentUserID)
+        let candidates = pool.filter { post in
             post.climbID == nil && !post.routeName.trimmingCharacters(in: .whitespaces).isEmpty
-                && post.placeID == placeID && (placeID != nil || post.authorID == currentUserID)
+                && post.placeID == placeID
         }
         let groups = Dictionary(grouping: candidates) { NameMatcher.normalize($0.routeName) }
         return groups.values.compactMap { group -> KnownRoute? in

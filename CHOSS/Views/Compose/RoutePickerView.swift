@@ -86,7 +86,7 @@ struct RoutePickerView: View {
         .sheet(isPresented: $addingClimb) {
             AddClimbView(placeID: placeID, suggestedName: trimmedQuery) { climb in
                 // AddClimbView returns an existing climb if you tapped "Did you mean…?".
-                let isNew = climb.createdBy == store.currentUserID && store.posts(ofClimb: climb.id).isEmpty
+                let isNew = climb.createdBy == store.currentUserID && store.postCount(ofClimb: climb.id) == 0
                 choose(.climb(climb, isNew: isNew))
             }
         }

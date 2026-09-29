@@ -8,7 +8,7 @@ shows up in your feed. You can follow individual climbers too, Instagram-style.
 
 - **Home:** a feed of sends posted to places you follow plus climbers you follow, filterable by *All / Places / Climbers*. A row of your followed places sits at the top, like Instagram's stories tray.
 - **Explore:** trending sends (filter by boulder/sport/trad/top-rope), popular gyms and crags, and a map of every place.
-- **Search:** places, outdoor climbs, climbers, and sends (by route name, grade, place or caption).
+- **Search:** places, outdoor climbs, climbers, and sends (by route name, grade, place or caption). Searches run in the background on a prebuilt index (typo-tolerant, results in milliseconds even with hundreds of thousands of items), and long lists load 50 rows at a time. See [docs/SEARCH_AND_SCALE.md](docs/SEARCH_AND_SCALE.md).
 - **Profile:** stats, up to 3 home gyms / crags, hardest grades, a grid of sends, and followed places. Tap Followers, Following or Places to see the list, with a forgiving search.
 - **Place page:** follow button, follower/send/climber counts, map, sends at this place, and a *Post a send* button.
 - **Crag profiles and climbs:** outdoor crags also have a *Climbs* tab listing their permanent routes and problems, grouped by area and searchable by name (typo-tolerant). Each climb has its own page with a grid of every video posted of it (beta, sortable by most recent or most liked; tap one to scroll through them from there), its guidebook grade, the grade climbers say it feels like, and a *Post your send* button. When posting at a crag you search the crag's climbs and pick the best match, or add a missing one, so the video is filed under that climb.
@@ -61,6 +61,7 @@ CHOSS/
   Views/                      Home, Explore, Search, Profile, Places, Posts, Compose, Components
 scripts/import_places.py      seed gyms (OpenStreetMap) and crags (OpenBeta)
 docs/PLACES_DATA_STRATEGY.md  how to populate gyms and crags
+docs/SEARCH_AND_SCALE.md      search index, lookups, and scaling past the device
 ```
 
 Views only talk to `AppStore`, and `AppStore` only talks to `ClimbingRepository`. Moving

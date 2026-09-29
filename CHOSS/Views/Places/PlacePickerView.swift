@@ -13,6 +13,8 @@ struct PlacePickerView: View {
 
     @State private var query = ""
     @State private var addingPlace = false
+    @State private var search = SearchResults()
+    @State private var pageLimit = Paging.pageSize
 
     var body: some View {
         List {
@@ -46,6 +48,9 @@ struct PlacePickerView: View {
                     }
                     .buttonStyle(.plain)
                 }
+                if resultIDs.count > pageLimit {
+                    LoadMoreRow { pageLimit += Paging.pageSize }
+                }
             }
 
             Section {
@@ -61,11 +66,19 @@ struct PlacePickerView: View {
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
                     prompt: "Search gyms and crags by name or town")
         .autocorrectionDisabled()
+        .runSearch(query, version: store.searchIndexVersion, into: $search) { [store] text in
+            await store.searchPlaceIDs(text)
+        }
+        .onChange(of: query) { pageLimit = Paging.pageSize }
         .onSubmit(of: .search) {
-            // Return picks the best match.
-            if let best = results.first, !query.isEmpty {
-                selection = best.id
-                dismiss()
+            // Return picks the best match (searched now, in case the typed results haven't landed yet).
+            let text = query
+            guard !SearchResults.clean(text).isEmpty else { return }
+            Task {
+                if let best = await store.searchPlaceIDs(text, limit: 1).first {
+                    selection = best
+                    dismiss()
+                }
             }
         }
         .sheet(isPresented: $addingPlace) {
@@ -77,11 +90,14 @@ struct PlacePickerView: View {
     }
 
     /// With no query, followed places come first so posting at your usual gym is one tap.
+    private var resultIDs: [Place.ID] {
+        guard SearchResults.clean(query).isEmpty else { return Array(search.ids.prefix(pageLimit + 1)) }
+        let followed = store.followedPlaces(of: store.currentUserID).map(\.id)
+        return Paging.page(followed, then: store.popularPlaceIDs(), limit: pageLimit)
+    }
+
     private var results: [Place] {
-        guard query.isEmpty else { return store.searchPlaces(query) }
-        let followed = store.followedPlaces(of: store.currentUserID)
-        let others = store.allPlaces.filter { !followed.contains($0) }
-        return followed + others
+        resultIDs.prefix(pageLimit).compactMap { store.place($0) }
     }
 }
 
@@ -93,6 +109,8 @@ struct HomePlacesPickerView: View {
 
     @State private var query = ""
     @State private var addingPlace = false
+    @State private var search = SearchResults()
+    @State private var pageLimit = Paging.pageSize
 
     private let limit = User.maxHomePlaces
     private var isFull: Bool { selection.count >= limit }
@@ -146,6 +164,9 @@ struct HomePlacesPickerView: View {
                     .opacity(isFull && !isSelected ? 0.4 : 1)
                     .accessibilityAddTraits(isSelected ? .isSelected : [])
                 }
+                if resultIDs.count > pageLimit {
+                    LoadMoreRow { pageLimit += Paging.pageSize }
+                }
             }
 
             Section {
@@ -167,11 +188,19 @@ struct HomePlacesPickerView: View {
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
                     prompt: "Search gyms and crags by name or town")
         .autocorrectionDisabled()
+        .runSearch(query, version: store.searchIndexVersion, into: $search) { [store] text in
+            await store.searchPlaceIDs(text)
+        }
+        .onChange(of: query) { pageLimit = Paging.pageSize }
         .onSubmit(of: .search) {
             // Return adds the best match.
-            if let best = results.first, !query.isEmpty, !selection.contains(best.id), !isFull {
-                selection.append(best.id)
-                query = ""
+            let text = query
+            guard !SearchResults.clean(text).isEmpty, !isFull else { return }
+            Task {
+                if let best = await store.searchPlaceIDs(text, limit: 1).first, !selection.contains(best), !isFull {
+                    selection.append(best)
+                    query = ""
+                }
             }
         }
         .sheet(isPresented: $addingPlace) {
@@ -190,11 +219,14 @@ struct HomePlacesPickerView: View {
     }
 
     /// With no query, followed places come first.
+    private var resultIDs: [Place.ID] {
+        guard SearchResults.clean(query).isEmpty else { return Array(search.ids.prefix(pageLimit + 1)) }
+        let followed = store.followedPlaces(of: store.currentUserID).map(\.id)
+        return Paging.page(followed, then: store.popularPlaceIDs(), limit: pageLimit)
+    }
+
     private var results: [Place] {
-        guard query.isEmpty else { return store.searchPlaces(query) }
-        let followed = store.followedPlaces(of: store.currentUserID)
-        let others = store.allPlaces.filter { !followed.contains($0) }
-        return followed + others
+        resultIDs.prefix(pageLimit).compactMap { store.place($0) }
     }
 }
 

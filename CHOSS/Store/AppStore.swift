@@ -47,6 +47,49 @@ final class AppStore {
     private(set) var conversations: [Conversation] = []
     private(set) var messages: [Message] = []
 
+    // MARK: Derived lookups
+    // Kept in sync by `rebuildLookups()` (on load) and by each mutation, so reads are
+    // dictionary lookups instead of scans over every post / follow. See docs/SEARCH_AND_SCALE.md.
+
+    /// Post id → insertion counter; its position in `posts` is `posts.count - 1 - key`
+    /// (new posts go to the front, so existing keys never change).
+    @ObservationIgnored private var postAgeKeys: [Post.ID: Int] = [:]
+    @ObservationIgnored private var nextPostAgeKey = 0
+    /// Newest first.
+    private(set) var postIDsByPlace: [Place.ID: [Post.ID]] = [:]
+    private(set) var postIDsByAuthor: [User.ID: [Post.ID]] = [:]
+    private(set) var postIDsByClimb: [Climb.ID: [Post.ID]] = [:]
+    /// "Same climb" groups (see `climbKey(for:)`), newest first.
+    private(set) var postIDsByClimbKey: [String: [Post.ID]] = [:]
+    @ObservationIgnored private(set) var climbKeyByPost: [Post.ID: String] = [:]
+    /// Alphabetical.
+    private(set) var climbIDsByPlace: [Place.ID: [Climb.ID]] = [:]
+    private(set) var placeFollowerCounts: [Place.ID: Int] = [:]
+    private(set) var followerIDsByUser: [User.ID: Set<User.ID>] = [:]
+    private(set) var repostCounts: [Post.ID: Int] = [:]
+    /// Bumped when follows / posts / places change, so cached rankings are recomputed once.
+    private(set) var popularityVersion = 0
+    /// Bumped when likes or posts change (trending).
+    private(set) var engagementVersion = 0
+    @ObservationIgnored private var popularPlacesCache: [String: [Place.ID]] = [:]
+    @ObservationIgnored private var popularPlacesCacheVersion = -1
+    @ObservationIgnored private var trendingCache: [String: [Post.ID]] = [:]
+    @ObservationIgnored private var trendingCacheVersion = -1
+    @ObservationIgnored private var mostFilmedClimbsCache: [Climb.ID] = []
+    @ObservationIgnored private var mostFilmedClimbsCacheVersion = -1
+    @ObservationIgnored private var popularUsersCache: [User.ID] = []
+    @ObservationIgnored private var popularUsersCacheVersion = -1
+
+    // MARK: Search indexes
+    // Built off the main thread after loading; items added later are upserted in place.
+    @ObservationIgnored private var placeIndex = SearchIndex()
+    @ObservationIgnored private var climbIndex = SearchIndex()
+    @ObservationIgnored private var userIndex = SearchIndex()
+    @ObservationIgnored private var postIndex = SearchIndex()
+    @ObservationIgnored private var indexGeneration = 0
+    /// Bumped whenever the indexes change, so open searches re-run.
+    private(set) var searchIndexVersion = 0
+
     init(repository: ClimbingRepository = MockClimbingRepository(),
          currentUserID: User.ID = SampleData.currentUserID) {
         self.repository = repository
@@ -81,6 +124,8 @@ final class AppStore {
         reposts = snapshot.reposts
         conversations = snapshot.conversations
         messages = snapshot.messages.sorted { $0.createdAt < $1.createdAt }
+        rebuildLookups()
+        rebuildSearchIndexes()
         isLoaded = true
     }
 
@@ -101,10 +146,9 @@ final class AppStore {
 
     func user(_ id: User.ID) -> User? { users[id] }
     func place(_ id: Place.ID?) -> Place? { id.flatMap { places[$0] } }
-    func post(_ id: Post.ID) -> Post? { posts.first { $0.id == id } }
+    func post(_ id: Post.ID) -> Post? { postPosition(id).map { posts[$0] } }
     func climb(_ id: Climb.ID?) -> Climb? { id.flatMap { climbs[$0] } }
 
-    var allPlaces: [Place] { places.values.sorted { $0.name < $1.name } }
     var allUsers: [User] { users.values.sorted { $0.displayName < $1.displayName } }
 
     // MARK: - Feeds
@@ -147,11 +191,16 @@ final class AppStore {
     }
 
     func posts(at placeID: Place.ID) -> [Post] {
-        posts.filter { $0.placeID == placeID }
+        (postIDsByPlace[placeID] ?? []).compactMap { post($0) }
     }
 
+    /// Counts without building the post arrays (for list rows).
+    func postCount(at placeID: Place.ID) -> Int { postIDsByPlace[placeID]?.count ?? 0 }
+    func postCount(by userID: User.ID) -> Int { postIDsByAuthor[userID]?.count ?? 0 }
+    func postCount(ofClimb climbID: Climb.ID) -> Int { postIDsByClimb[climbID]?.count ?? 0 }
+
     func posts(by userID: User.ID) -> [Post] {
-        posts.filter { $0.authorID == userID }
+        (postIDsByAuthor[userID] ?? []).compactMap { post($0) }
     }
 
     /// Posts a user has reposted, most recent repost first.
@@ -164,30 +213,66 @@ final class AppStore {
 
     /// Most-liked recent sends for Explore.
     func trendingPosts(discipline: ClimbDiscipline? = nil) -> [Post] {
-        posts
-            .filter { discipline == nil || $0.discipline == discipline }
-            .sorted { ($0.likedBy.count, $0.createdAt) > ($1.likedBy.count, $1.createdAt) }
+        trendingPostIDs(discipline: discipline).compactMap { post($0) }
     }
 
-    /// Most-followed first, then most sends, then alphabetical (most imported gyms have neither yet).
+    /// Cached; re-sorted only after likes or posts change.
+    func trendingPostIDs(discipline: ClimbDiscipline? = nil) -> [Post.ID] {
+        if trendingCacheVersion != engagementVersion {
+            trendingCache = [:]
+            trendingCacheVersion = engagementVersion
+        }
+        let key = discipline?.rawValue ?? "all"
+        if let cached = trendingCache[key] { return cached }
+        let ids = posts
+            .filter { discipline == nil || $0.discipline == discipline }
+            .sorted { ($0.likedBy.count, $0.createdAt) > ($1.likedBy.count, $1.createdAt) }
+            .map(\.id)
+        trendingCache[key] = ids
+        return ids
+    }
+
+    /// Most-followed first, then most sends, then alphabetical (most imported places have neither yet).
     func popularPlaces(kind: PlaceKind? = nil) -> [Place] {
-        // Count once up front: with ~1,500 places, counting inside the sort would be slow.
-        var followers: [Place.ID: Int] = [:]
-        for followed in followedPlaces.values {
-            for id in followed { followers[id, default: 0] += 1 }
+        popularPlaceIDs(kind: kind).compactMap { places[$0] }
+    }
+
+    /// Cached; re-sorted only after follows, posts or places change (not on every screen redraw).
+    func popularPlaceIDs(kind: PlaceKind? = nil) -> [Place.ID] {
+        if popularPlacesCacheVersion != popularityVersion {
+            popularPlacesCache = [:]
+            popularPlacesCacheVersion = popularityVersion
         }
-        var sends: [Place.ID: Int] = [:]
-        for post in posts {
-            if let id = post.placeID { sends[id, default: 0] += 1 }
-        }
-        return places.values
+        let key = kind?.rawValue ?? "all"
+        if let cached = popularPlacesCache[key] { return cached }
+        let ranked = places.values
             .filter { kind == nil || $0.kind == kind }
-            .sorted { lhs, rhs in
-                let l = (followers[lhs.id] ?? 0, sends[lhs.id] ?? 0)
-                let r = (followers[rhs.id] ?? 0, sends[rhs.id] ?? 0)
-                if l != r { return l > r }
-                return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+            .map { place in
+                (id: place.id, followers: placeFollowerCounts[place.id] ?? 0,
+                 sends: postIDsByPlace[place.id]?.count ?? 0, name: place.name.lowercased())
             }
+            .sorted { lhs, rhs in
+                if lhs.followers != rhs.followers { return lhs.followers > rhs.followers }
+                if lhs.sends != rhs.sends { return lhs.sends > rhs.sends }
+                return lhs.name < rhs.name
+            }
+            .map { $0.id }
+        popularPlacesCache[key] = ranked
+        return ranked
+    }
+
+    /// Climbers by follower count (suggestions when nothing is typed). Cached like places.
+    func popularUserIDs() -> [User.ID] {
+        if popularUsersCacheVersion != popularityVersion {
+            popularUsersCache = users.values
+                .sorted { lhs, rhs in
+                    let l = followerIDsByUser[lhs.id]?.count ?? 0, r = followerIDsByUser[rhs.id]?.count ?? 0
+                    return l != r ? l > r : lhs.displayName < rhs.displayName
+                }
+                .map(\.id)
+            popularUsersCacheVersion = popularityVersion
+        }
+        return popularUsersCache
     }
 
     // MARK: - Follow graph
@@ -201,18 +286,17 @@ final class AppStore {
     }
 
     func followerCount(of placeID: Place.ID) -> Int {
-        followedPlaces.values.filter { $0.contains(placeID) }.count
+        placeFollowerCounts[placeID] ?? 0
     }
 
     func followerCount(ofUser userID: User.ID) -> Int {
-        followedUsers.values.filter { $0.contains(userID) }.count
+        followerIDsByUser[userID]?.count ?? 0
     }
 
     /// Climbers who follow `userID`, alphabetically.
     func followers(of userID: User.ID) -> [User] {
-        followedUsers
-            .filter { $0.value.contains(userID) }
-            .compactMap { users[$0.key] }
+        (followerIDsByUser[userID] ?? [])
+            .compactMap { users[$0] }
             .sorted { $0.displayName < $1.displayName }
     }
 
@@ -234,9 +318,12 @@ final class AppStore {
         let me = currentUserID
         if follow {
             followedPlaces[me, default: []].insert(placeID)
+            placeFollowerCounts[placeID, default: 0] += 1
         } else {
             followedPlaces[me, default: []].remove(placeID)
+            placeFollowerCounts[placeID] = max((placeFollowerCounts[placeID] ?? 1) - 1, 0)
         }
+        popularityVersion += 1
         perform { [repository] in
             try await repository.setFollow(placeID: placeID, following: follow, by: me)
         }
@@ -248,9 +335,12 @@ final class AppStore {
         let me = currentUserID
         if follow {
             followedUsers[me, default: []].insert(userID)
+            followerIDsByUser[userID, default: []].insert(me)
         } else {
             followedUsers[me, default: []].remove(userID)
+            followerIDsByUser[userID]?.remove(me)
         }
+        popularityVersion += 1
         perform { [repository] in
             try await repository.setFollow(userID: userID, following: follow, by: me)
         }
@@ -263,7 +353,8 @@ final class AppStore {
     }
 
     func toggleLike(_ postID: Post.ID) {
-        guard let index = posts.firstIndex(where: { $0.id == postID }) else { return }
+        guard let index = postPosition(postID) else { return }
+        defer { engagementVersion += 1 }
         let me = currentUserID
         let like = !posts[index].likedBy.contains(me)
         if like {
@@ -278,7 +369,7 @@ final class AppStore {
 
     func addComment(_ text: String, to postID: Post.ID) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, let index = posts.firstIndex(where: { $0.id == postID }) else { return }
+        guard !trimmed.isEmpty, let index = postPosition(postID) else { return }
         let comment = Comment(id: UUID().uuidString, authorID: currentUserID, text: trimmed, createdAt: .now)
         posts[index].comments.append(comment)
         perform { [repository] in
@@ -287,7 +378,7 @@ final class AppStore {
     }
 
     func deleteComment(_ commentID: Comment.ID, from postID: Post.ID) {
-        guard let index = posts.firstIndex(where: { $0.id == postID }),
+        guard let index = postPosition(postID),
               posts[index].comments.contains(where: { $0.id == commentID && $0.authorID == currentUserID })
         else { return }
         posts[index].comments.removeAll { $0.id == commentID }
@@ -303,7 +394,7 @@ final class AppStore {
     }
 
     func repostCount(_ postID: Post.ID) -> Int {
-        reposts.filter { $0.postID == postID }.count
+        repostCounts[postID] ?? 0
     }
 
     /// Reposting your own post isn't allowed (same as Instagram).
@@ -314,12 +405,14 @@ final class AppStore {
         let me = currentUserID
         if isReposted(postID) {
             reposts.removeAll { $0.postID == postID && $0.userID == me }
+            repostCounts[postID] = max((repostCounts[postID] ?? 1) - 1, 0)
             perform { [repository] in
                 try await repository.removeRepost(postID: postID, by: me)
             }
         } else {
             let repost = Repost(id: UUID().uuidString, userID: me, postID: postID, createdAt: .now)
             reposts.append(repost)
+            repostCounts[postID, default: 0] += 1
             perform { [repository] in
                 try await repository.addRepost(repost)
             }
@@ -393,6 +486,8 @@ final class AppStore {
     func updateProfile(_ user: User) {
         guard user.id == currentUserID else { return }
         users[user.id] = user
+        userIndex.upsert(searchItem(for: user))
+        searchIndexVersion += 1
         followHomePlaces(of: user)
         perform { [repository] in
             try await repository.saveUser(user)
@@ -415,6 +510,9 @@ final class AppStore {
         do {
             try await repository.saveUser(user)
             users[user.id] = user
+            userIndex.upsert(searchItem(for: user))
+            searchIndexVersion += 1
+            popularityVersion += 1
             currentUserID = user.id
             followHomePlaces(of: user)
             return true
@@ -446,6 +544,7 @@ final class AppStore {
         do {
             let saved = try await repository.createPost(post)
             posts.insert(saved, at: 0)
+            indexNewPost(saved)
             return true
         } catch {
             lastError = error.localizedDescription
@@ -458,6 +557,9 @@ final class AppStore {
         do {
             let saved = try await repository.addPlace(place)
             places[saved.id] = saved
+            placeIndex.upsert(searchItem(for: saved))
+            searchIndexVersion += 1
+            popularityVersion += 1
             if !isFollowing(place: saved.id) { toggleFollow(place: saved.id) }
             return saved
         } catch {
@@ -470,22 +572,37 @@ final class AppStore {
 
     /// Every climb at a crag, alphabetically.
     func climbs(at placeID: Place.ID) -> [Climb] {
-        climbs.values.filter { $0.placeID == placeID }.sorted { $0.name < $1.name }
+        (climbIDsByPlace[placeID] ?? []).compactMap { climbs[$0] }
     }
 
     /// Every send video of a climb (its beta), newest first.
     func posts(ofClimb climbID: Climb.ID) -> [Post] {
-        posts.filter { $0.climbID == climbID }
+        (postIDsByClimb[climbID] ?? []).compactMap { post($0) }
     }
 
-    /// Fuzzy climb-name search, best match first, optionally limited to one crag.
-    func searchClimbs(_ query: String, at placeID: Place.ID? = nil) -> [Climb] {
-        let pool = placeID.map { climbs(at: $0) } ?? climbs.values.sorted { $0.name < $1.name }
+    /// Fuzzy climb-name search within one crag (a crag has a manageable number of climbs).
+    /// Searching every climb everywhere goes through `searchClimbIDs(_:)` instead.
+    func searchClimbs(_ query: String, at placeID: Place.ID) -> [Climb] {
+        let pool = climbs(at: placeID)
         guard !query.trimmingCharacters(in: .whitespaces).isEmpty else {
             // No query: most-filmed climbs first, handy for finding beta.
-            return pool.sorted { posts(ofClimb: $0.id).count > posts(ofClimb: $1.id).count }
+            return pool.sorted { postCount(ofClimb: $0.id) > postCount(ofClimb: $1.id) }
         }
         return NameMatcher.rank(pool, query: query)
+    }
+
+    /// Climbs with the most videos first (only climbs that have any). Cached until posts change.
+    func mostFilmedClimbIDs() -> [Climb.ID] {
+        if mostFilmedClimbsCacheVersion != engagementVersion {
+            mostFilmedClimbsCache = postIDsByClimb
+                .filter { climbs[$0.key] != nil }
+                .sorted { lhs, rhs in
+                    lhs.value.count != rhs.value.count ? lhs.value.count > rhs.value.count : lhs.key < rhs.key
+                }
+                .map { $0.key }
+            mostFilmedClimbsCacheVersion = engagementVersion
+        }
+        return mostFilmedClimbsCache
     }
 
     /// Adds a climb that isn't in the database yet (shown as unverified).
@@ -493,6 +610,10 @@ final class AppStore {
         do {
             let saved = try await repository.addClimb(climb)
             climbs[saved.id] = saved
+            climbIDsByPlace[saved.placeID, default: []].append(saved.id)
+            climbIDsByPlace[saved.placeID]?.sort { (climbs[$0]?.name ?? "") < (climbs[$1]?.name ?? "") }
+            climbIndex.upsert(searchItem(for: saved))
+            searchIndexVersion += 1
             return saved
         } catch {
             lastError = error.localizedDescription
@@ -501,42 +622,175 @@ final class AppStore {
     }
 
     // MARK: - Search
+    // Every search runs on a snapshot of an index, off the main thread, and returns ids (best
+    // match first). Cost stays roughly flat as the number of places / climbs / people / sends grows.
 
-    func searchPlaces(_ query: String) -> [Place] {
-        let q = query.trimmingCharacters(in: .whitespaces)
-        guard !q.isEmpty else { return popularPlaces() }
-        // Typo-tolerant, by name first, then town/region ("movement", "bishop", "hueco").
-        return allPlaces
-            .compactMap { place -> (Place, Double)? in
-                let byName = NameMatcher.score(query: q, names: [place.name])
-                let byLocation = NameMatcher.score(query: q, names: [place.city, place.region, place.country])
-                    .map { $0 - 5 }  // a name match beats a same-quality location match
-                guard let score = [byName, byLocation].compactMap({ $0 }).max() else { return nil }
-                return (place, score)
-            }
-            .sorted { lhs, rhs in
-                lhs.1 != rhs.1 ? lhs.1 > rhs.1 : followerCount(of: lhs.0.id) > followerCount(of: rhs.0.id)
-            }
-            .map { $0.0 }
+    func searchPlaceIDs(_ query: String, kind: PlaceKind? = nil, limit: Int = 100) async -> [Place.ID] {
+        let index = placeIndex
+        return await Task.detached(priority: .userInitiated) {
+            index.search(query, tag: kind?.rawValue, limit: limit)
+        }.value
     }
 
-    func searchUsers(_ query: String) -> [User] {
-        let q = query.trimmingCharacters(in: .whitespaces)
-        guard !q.isEmpty else { return allUsers.filter { $0.id != currentUserID } }
-        return allUsers.filter {
-            $0.username.localizedCaseInsensitiveContains(q) || $0.displayName.localizedCaseInsensitiveContains(q)
+    func searchClimbIDs(_ query: String, limit: Int = 100) async -> [Climb.ID] {
+        let index = climbIndex
+        return await Task.detached(priority: .userInitiated) { index.search(query, limit: limit) }.value
+    }
+
+    func searchUserIDs(_ query: String, limit: Int = 100) async -> [User.ID] {
+        let index = userIndex
+        return await Task.detached(priority: .userInitiated) { index.search(query, limit: limit) }.value
+    }
+
+    /// Sends by climb name, caption, place or climber. A query that is exactly a grade ("v5",
+    /// "5.11a") also finds recent sends at that grade.
+    func searchPostIDs(_ query: String, limit: Int = 100) async -> [Post.ID] {
+        let index = postIndex
+        let byText = await Task.detached(priority: .userInitiated) { index.search(query, limit: limit) }.value
+        let wanted = query.trimmingCharacters(in: .whitespaces).lowercased()
+        guard GradeSystem.allCases.contains(where: { $0.grades.contains { $0.lowercased() == wanted } }) else {
+            return byText
+        }
+        // Grades are community averages that change as people post, so they aren't indexed;
+        // check the most recent sends only, which keeps this bounded.
+        let byGrade = posts.prefix(2_000)
+            .filter { displayGrade(for: $0)?.value.lowercased() == wanted }
+            .prefix(limit)
+            .map(\.id)
+        var seen = Set(byGrade)
+        return Array((byGrade + byText.filter { seen.insert($0).inserted }).prefix(limit))
+    }
+
+    // MARK: - Lookup maintenance
+
+    private func postPosition(_ id: Post.ID) -> Int? {
+        guard let key = postAgeKeys[id] else { return nil }
+        let position = posts.count - 1 - key
+        guard posts.indices.contains(position), posts[position].id == id else { return nil }
+        return position
+    }
+
+    /// Recomputes every derived lookup from scratch (on load).
+    private func rebuildLookups() {
+        var ageKeys: [Post.ID: Int] = [:]
+        var byPlace: [Place.ID: [Post.ID]] = [:]
+        var byAuthor: [User.ID: [Post.ID]] = [:]
+        var byClimb: [Climb.ID: [Post.ID]] = [:]
+        var byKey: [String: [Post.ID]] = [:]
+        var keys: [Post.ID: String] = [:]
+        ageKeys.reserveCapacity(posts.count)
+        for (position, post) in posts.enumerated() {  // newest first, so appends stay newest first
+            ageKeys[post.id] = posts.count - 1 - position
+            if let placeID = post.placeID { byPlace[placeID, default: []].append(post.id) }
+            byAuthor[post.authorID, default: []].append(post.id)
+            if let climbID = post.climbID { byClimb[climbID, default: []].append(post.id) }
+            if let key = computeClimbKey(for: post) {
+                keys[post.id] = key
+                byKey[key, default: []].append(post.id)
+            }
+        }
+        postAgeKeys = ageKeys
+        nextPostAgeKey = posts.count
+        postIDsByPlace = byPlace
+        postIDsByAuthor = byAuthor
+        postIDsByClimb = byClimb
+        postIDsByClimbKey = byKey
+        climbKeyByPost = keys
+
+        climbIDsByPlace = Dictionary(grouping: climbs.values, by: \.placeID)
+            .mapValues { $0.sorted { $0.name < $1.name }.map(\.id) }
+
+        var placeCounts: [Place.ID: Int] = [:]
+        for followed in followedPlaces.values {
+            for id in followed { placeCounts[id, default: 0] += 1 }
+        }
+        placeFollowerCounts = placeCounts
+
+        var followers: [User.ID: Set<User.ID>] = [:]
+        for (follower, followed) in followedUsers {
+            for id in followed { followers[id, default: []].insert(follower) }
+        }
+        followerIDsByUser = followers
+
+        var reposted: [Post.ID: Int] = [:]
+        for repost in reposts { reposted[repost.postID, default: 0] += 1 }
+        repostCounts = reposted
+
+        popularityVersion += 1
+        engagementVersion += 1
+    }
+
+    /// Adds a just-created post (already inserted at the front of `posts`) to every lookup.
+    private func indexNewPost(_ post: Post) {
+        postAgeKeys[post.id] = nextPostAgeKey
+        nextPostAgeKey += 1
+        if let placeID = post.placeID { postIDsByPlace[placeID, default: []].insert(post.id, at: 0) }
+        postIDsByAuthor[post.authorID, default: []].insert(post.id, at: 0)
+        if let climbID = post.climbID { postIDsByClimb[climbID, default: []].insert(post.id, at: 0) }
+        if let key = computeClimbKey(for: post) {
+            climbKeyByPost[post.id] = key
+            postIDsByClimbKey[key, default: []].insert(post.id, at: 0)
+        }
+        postIndex.upsert(searchItem(for: post))
+        searchIndexVersion += 1
+        popularityVersion += 1
+        engagementVersion += 1
+    }
+
+    // MARK: - Search index building
+
+    private func searchItem(for place: Place) -> SearchIndex.Item {
+        SearchIndex.Item(id: place.id, names: [place.name], secondary: [place.city, place.region],
+                         tag: place.kind.rawValue,
+                         boost: Double(placeFollowerCounts[place.id] ?? 0) + Double(postIDsByPlace[place.id]?.count ?? 0) / 100)
+    }
+
+    private func searchItem(for climb: Climb) -> SearchIndex.Item {
+        SearchIndex.Item(id: climb.id, names: [climb.name],
+                         secondary: [climb.area, places[climb.placeID]?.name ?? ""],
+                         boost: Double(postIDsByClimb[climb.id]?.count ?? 0))
+    }
+
+    private func searchItem(for user: User) -> SearchIndex.Item {
+        SearchIndex.Item(id: user.id, names: [user.displayName, user.username],
+                         boost: Double(followerIDsByUser[user.id]?.count ?? 0))
+    }
+
+    private func searchItem(for post: Post) -> SearchIndex.Item {
+        SearchIndex.Item(id: post.id, names: [climbs[post.climbID ?? ""]?.name ?? post.routeName],
+                         secondary: [post.caption, places[post.placeID ?? ""]?.name ?? "",
+                                     users[post.authorID]?.username ?? ""],
+                         boost: Double(post.likedBy.count))
+    }
+
+    /// Builds all four indexes in the background. Gathering the items is a quick pass here;
+    /// the expensive part (normalizing every name, building the trigram tables) runs off the
+    /// main thread, and results are swapped in when ready.
+    private func rebuildSearchIndexes() {
+        indexGeneration += 1
+        let generation = indexGeneration
+        let placeItems = places.values.map { searchItem(for: $0) }
+        let climbItems = climbs.values.map { searchItem(for: $0) }
+        let userItems = users.values.map { searchItem(for: $0) }
+        let postItems = posts.map { searchItem(for: $0) }
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let places = SearchIndex(placeItems)
+            let climbs = SearchIndex(climbItems)
+            let users = SearchIndex(userItems)
+            let posts = SearchIndex(postItems)
+            await self?.installIndexes(generation: generation, places: places, climbs: climbs,
+                                       users: users, posts: posts)
         }
     }
 
-    func searchPosts(_ query: String) -> [Post] {
-        let q = query.trimmingCharacters(in: .whitespaces)
-        guard !q.isEmpty else { return trendingPosts() }
-        return posts.filter { post in
-            post.routeName.localizedCaseInsensitiveContains(q)
-                || post.caption.localizedCaseInsensitiveContains(q)
-                || (displayGrade(for: post)?.value.localizedCaseInsensitiveContains(q) ?? false)
-                || (place(post.placeID)?.name.localizedCaseInsensitiveContains(q) ?? false)
-        }
+    private func installIndexes(generation: Int, places: SearchIndex, climbs: SearchIndex,
+                                users: SearchIndex, posts: SearchIndex) {
+        guard generation == indexGeneration else { return }  // a newer rebuild is on its way
+        placeIndex = places
+        climbIndex = climbs
+        userIndex = users
+        postIndex = posts
+        searchIndexVersion += 1
     }
 
     // MARK: - Stats
