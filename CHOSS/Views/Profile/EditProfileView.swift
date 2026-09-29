@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 /// Used both for first-time profile setup and for editing later.
 struct EditProfileView: View {
@@ -14,6 +15,15 @@ struct EditProfileView: View {
     @State private var user: User
     @State private var isSaving = false
     @State private var error: String?
+    @State private var photoItem: PhotosPickerItem?
+    @State private var photoToFrame: PhotoToFrame?
+    @State private var isLoadingPhoto = false
+
+    /// A picked photo waiting to be framed.
+    private struct PhotoToFrame: Identifiable {
+        let id = UUID()
+        let image: UIImage
+    }
 
     /// Edit an existing profile.
     init(user: User) {
@@ -39,7 +49,7 @@ struct EditProfileView: View {
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
-                        AvatarView(user: user, size: 84)
+                        photoPicker
                     }
                     .frame(maxWidth: .infinity)
                     .listRowBackground(Color.clear)
@@ -83,6 +93,18 @@ struct EditProfileView: View {
                     Text("Your grade tells people what kind of climber you are. Hide it any time; it's still used to suggest climbs and places.")
                 }
             }
+            .onChange(of: photoItem) { _, item in
+                guard let item else { return }
+                loadPhoto(item)
+            }
+            .fullScreenCover(item: $photoToFrame) { photo in
+                AvatarCropView(image: photo.image) {
+                    photoToFrame = nil
+                } onDone: { framed in
+                    savePhoto(framed)
+                    photoToFrame = nil
+                }
+            }
             .navigationTitle(mode == .setup ? "Set up your profile" : "Edit profile")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -103,6 +125,72 @@ struct EditProfileView: View {
             } message: {
                 Text(error ?? "")
             }
+        }
+    }
+
+    /// Tap the avatar (or "Add photo") to pick a picture, then frame it.
+    private var photoPicker: some View {
+        VStack(spacing: 8) {
+            PhotosPicker(selection: $photoItem, matching: .images, preferredItemEncoding: .current) {
+                AvatarView(user: user, size: 96)
+                    .overlay(alignment: .bottomTrailing) {
+                        Image(systemName: isLoadingPhoto ? "hourglass" : "camera.fill")
+                            .font(.caption.bold())
+                            .foregroundStyle(Brand.onAccent)
+                            .frame(width: 28, height: 28)
+                            .background(Color.accentColor, in: Circle())
+                            .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 2))
+                    }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(user.avatarURL == nil ? "Add profile photo" : "Change profile photo")
+
+            HStack(spacing: 16) {
+                PhotosPicker(user.avatarURL == nil ? "Add photo" : "Change photo",
+                             selection: $photoItem, matching: .images, preferredItemEncoding: .current)
+                    .font(.subheadline.bold())
+                if user.avatarURL != nil {
+                    Button("Remove", role: .destructive) {
+                        user.avatarURL = nil
+                    }
+                    .font(.subheadline)
+                }
+            }
+            // Separate tap targets inside a Form row (otherwise a tap triggers every button).
+            .buttonStyle(.borderless)
+        }
+    }
+
+    private func loadPhoto(_ item: PhotosPickerItem) {
+        isLoadingPhoto = true
+        Task {
+            defer {
+                isLoadingPhoto = false
+                photoItem = nil  // so picking the same photo again still triggers
+            }
+            guard let data = try? await item.loadTransferable(type: Data.self),
+                  let original = UIImage(data: data) else {
+                error = "Couldn't load that photo."
+                return
+            }
+            // Keep framing smooth with huge camera photos: 2048px on the long side is plenty
+            // for a 600px avatar.
+            let longSide = max(original.size.width, original.size.height)
+            let target = longSide > 2048
+                ? CGSize(width: original.size.width * 2048 / longSide, height: original.size.height * 2048 / longSide)
+                : original.size
+            let prepared = await original.byPreparingThumbnail(ofSize: target) ?? original
+            photoToFrame = PhotoToFrame(image: prepared)
+        }
+    }
+
+    private func savePhoto(_ image: UIImage) {
+        do {
+            let url = try AvatarStorage.save(image)
+            AvatarImageCache.shared.store(image, for: url)
+            user.avatarURL = url
+        } catch {
+            self.error = "Couldn't save the photo: \(error.localizedDescription)"
         }
     }
 

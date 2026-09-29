@@ -8,18 +8,36 @@ extension Color {
     }
 }
 
+/// Profile picture, or colored initials when there's no photo (or while it loads).
 struct AvatarView: View {
     let user: User?
     var size: CGFloat = 36
+
+    @State private var image: UIImage?
 
     var body: some View {
         Circle()
             .fill(Color.seeded(user?.id ?? "?").gradient)
             .frame(width: size, height: size)
             .overlay {
-                Text(user?.initials ?? "?")
-                    .font(.system(size: size * 0.4, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white)
+                if let photo = image ?? user?.avatarURL.flatMap({ AvatarImageCache.shared.cachedImage(for: $0) }) {
+                    Image(uiImage: photo)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: size, height: size)
+                        .clipShape(Circle())
+                } else {
+                    Text(user?.initials ?? "?")
+                        .font(.system(size: size * 0.4, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white)
+                }
+            }
+            .task(id: user?.avatarURL) {
+                guard let url = user?.avatarURL else {
+                    image = nil
+                    return
+                }
+                image = await AvatarImageCache.shared.image(for: url)
             }
             .accessibilityLabel(user?.displayName ?? "Unknown climber")
     }
