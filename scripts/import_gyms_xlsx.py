@@ -78,10 +78,10 @@ def nearest_town(lat, lon, rows, coords):
     return row["name"], state, float(km[i])
 
 
-def place_id(name, lat, lon):
+def place_id(name, lat, lon, prefix="p_gym"):
     slug = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")[:40]
     digest = hashlib.sha1(f"{name}|{lat:.5f}|{lon:.5f}".encode()).hexdigest()[:6]
-    return f"p_gym_{slug}_{digest}"
+    return f"{prefix}_{slug}_{digest}"
 
 
 def disciplines(name):

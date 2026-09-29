@@ -505,7 +505,7 @@ final class AppStore {
     func searchPlaces(_ query: String) -> [Place] {
         let q = query.trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty else { return popularPlaces() }
-        // Typo-tolerant, by name first, then town/region ("granit", "bishop", "font").
+        // Typo-tolerant, by name first, then town/region ("movement", "bishop", "hueco").
         return allPlaces
             .compactMap { place -> (Place, Double)? in
                 let byName = NameMatcher.score(query: q, names: [place.name])

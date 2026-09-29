@@ -1,61 +1,42 @@
 import Foundation
 
 /// Seed data for the mock backend and SwiftUI previews.
-/// Gyms are fictional; crags are real, well-known areas.
+/// Places are the real gym and crag directories (BundledPlaces); users, posts and climbs are samples.
 enum SampleData {
     static let currentUserID: User.ID = "u_sam"
 
-    /// Every gym in the bundled US gym list, plus the sample outdoor crags.
-    static let places: [Place] = BundledGyms.places + crags
+    /// Every gym and crag in the bundled US directories.
+    static let places: [Place] = BundledPlaces.all
 
-    // Real gyms from the bundled list that the demo users and posts use.
-    // (IDs come from scripts/import_gyms_xlsx.py: name + coordinates.)
-    static let brooklynGym = "p_gym_movement_gowanus_fadad8"             // Movement Gowanus
-    static let oaklandGym = "p_gym_great_western_power_company_touchstone_e47cf1"  // Touchstone GWPC
-    static let denverGym = "p_gym_the_spot_denver_49ae62"                 // The Spot Denver
-
-    private static let crags: [Place] = [
-        Place(id: "p_rrg", name: "Red River Gorge", kind: .crag,
-              city: "Slade", region: "KY", country: "USA",
-              latitude: 37.8331, longitude: -83.6827,
-              disciplines: [.sport, .trad],
-              about: "Overhanging sandstone sport climbing and endless jugs."),
-        Place(id: "p_buttermilks", name: "Buttermilk Boulders", kind: .crag,
-              city: "Bishop", region: "CA", country: "USA",
-              latitude: 37.3272, longitude: -118.5770,
-              disciplines: [.boulder],
-              about: "Giant granite highballs below the Sierra."),
-        Place(id: "p_yosemite", name: "Yosemite Valley", kind: .crag,
-              city: "Yosemite", region: "CA", country: "USA",
-              latitude: 37.7456, longitude: -119.5936,
-              disciplines: [.trad, .boulder, .sport],
-              about: "Big walls, splitter cracks and the Camp 4 boulders."),
-        Place(id: "p_font", name: "Fontainebleau", kind: .crag,
-              city: "Fontainebleau", region: "Île-de-France", country: "France",
-              latitude: 48.4047, longitude: 2.7016,
-              disciplines: [.boulder],
-              about: "The birthplace of modern bouldering. Sandstone in the forest."),
-    ]
+    // Real places from the bundled lists that the demo users and posts use.
+    // (IDs come from the import scripts: name + coordinates.)
+    static let brooklynGym = "p_gym_movement_gowanus_fadad8"                      // Movement Gowanus
+    static let oaklandGym = "p_gym_great_western_power_company_touchstone_e47cf1" // Touchstone GWPC
+    static let denverGym = "p_gym_the_spot_denver_49ae62"                         // The Spot Denver
+    static let redRiverGorge = "p_crag_red_river_gorge_e58ba2"                    // Red River Gorge, KY
+    static let bishop = "p_crag_bishop_area_652d05"                               // Bishop Area, CA (Buttermilks)
+    static let yosemite = "p_crag_yosemite_national_park_33f84b"                  // Yosemite National Park, CA
+    static let huecoTanks = "p_crag_hueco_tanks_89b091"                           // Hueco Tanks, TX
 
     static let users: [User] = [
         User(id: "u_sam", username: "sam.sends", displayName: "Sam Rivera",
-             bio: "Plastic puller, occasional crag rat. Projecting V7.", homePlaceIDs: [brooklynGym, "p_buttermilks"],
+             bio: "Plastic puller, occasional crag rat. Projecting V7.", homePlaceIDs: [brooklynGym, bishop],
              boulderRange: GradeRange(system: .vScale, low: "V5", high: "V6"),
              ropeRange: GradeRange(system: .yds, low: "5.11b", high: "5.11d")),
         User(id: "u_alex", username: "alexcrimps", displayName: "Alex Chen",
              bio: "Crimps > slopers.", homePlaceIDs: [brooklynGym, denverGym],
              boulderRange: GradeRange(system: .vScale, low: "V7", high: "V8")),
         User(id: "u_jess", username: "jess_on_rock", displayName: "Jess Okafor",
-             bio: "Sport climbing and road trips.", homePlaceIDs: ["p_rrg"],
+             bio: "Sport climbing and road trips.", homePlaceIDs: [redRiverGorge],
              ropeRange: GradeRange(system: .yds, low: "5.12a", high: "5.12b")),
         User(id: "u_marco", username: "marco.boulders", displayName: "Marco Rossi",
-             bio: "Font every winter.", homePlaceIDs: ["p_font"],
-             boulderRange: GradeRange(system: .font, low: "7A", high: "7B"), showsGradeRange: false),
+             bio: "Winter bouldering in Hueco.", homePlaceIDs: [huecoTanks],
+             boulderRange: GradeRange(system: .vScale, low: "V6", high: "V8"), showsGradeRange: false),
         User(id: "u_priya", username: "priyaclimbs", displayName: "Priya Nair",
-             bio: "Highball enjoyer.", homePlaceIDs: ["p_buttermilks", oaklandGym, "p_yosemite"],
+             bio: "Highball enjoyer.", homePlaceIDs: [bishop, oaklandGym, yosemite],
              boulderRange: GradeRange(system: .vScale, low: "V6", high: nil)),
         User(id: "u_kenji", username: "kenji_k", displayName: "Kenji Watanabe",
-             bio: "Trad dad. Cracks only.", homePlaceIDs: ["p_yosemite"]),
+             bio: "Trad dad. Cracks only.", homePlaceIDs: [yosemite]),
     ]
 
     // Placeholder clips until real uploads exist.
@@ -90,23 +71,18 @@ enum SampleData {
              caption: "New blue problem went first try 😅 Heel hook at the lip is key.",
              createdAt: hoursAgo(2), likedBy: ["u_sam", "u_jess"],
              comments: [Comment(id: "c_1", authorID: "u_sam", text: "That heel is sick", createdAt: hoursAgo(1))]),
-        Post(id: "post_2", authorID: "u_jess", placeID: "p_rrg", climbID: "c_amarillo", videoURL: video(1),
+        Post(id: "post_2", authorID: "u_jess", placeID: redRiverGorge, climbID: "c_amarillo", videoURL: video(1),
              routeName: "Amarillo Sunset", discipline: .sport,
              grade: Grade(system: .yds, value: "5.11b"), proposedGrade: Grade(system: .yds, value: "5.11a"),
              sendStyle: .redpoint,
              caption: "Third session, finally clipped the chains. Beta: rest on the big jug before the roof.",
              createdAt: hoursAgo(5), likedBy: ["u_kenji"]),
-        Post(id: "post_3", authorID: "u_marco", placeID: "p_font", climbID: "c_marie_rose", videoURL: video(2),
-             routeName: "La Marie-Rose", discipline: .boulder,
-             grade: Grade(system: .font, value: "6A"), sendStyle: .repeatSend,
-             caption: "Lap on the classic. Perfect friction this morning.",
-             createdAt: hoursAgo(9), likedBy: ["u_priya", "u_sam", "u_alex"]),
-        Post(id: "post_4", authorID: "u_priya", placeID: "p_buttermilks", climbID: "c_iron_man", videoURL: video(3),
+        Post(id: "post_4", authorID: "u_priya", placeID: bishop, climbID: "c_iron_man", videoURL: video(3),
              routeName: "Iron Man Traverse", discipline: .boulder,
              grade: Grade(system: .vScale, value: "V4"), sendStyle: .onsight,
              caption: "Warmup before the highballs.",
              createdAt: hoursAgo(20)),
-        Post(id: "post_5", authorID: "u_kenji", placeID: "p_yosemite", climbID: "c_midnight_lightning", videoURL: video(0),
+        Post(id: "post_5", authorID: "u_kenji", placeID: yosemite, climbID: "c_midnight_lightning", videoURL: video(0),
              routeName: "Midnight Lightning", discipline: .boulder,
              grade: Grade(system: .vScale, value: "V8"), sendStyle: .redpoint,
              caption: "Ten years of trying. Camp 4 legend finally goes.",
@@ -127,50 +103,45 @@ enum SampleData {
              grade: Grade(system: .yds, value: "5.11c"), sendStyle: .repeatSend,
              caption: "Not a send, just training. Posting for my followers only.",
              createdAt: hoursAgo(70)),
-        Post(id: "post_9", authorID: "u_kenji", placeID: "p_yosemite", climbID: "c_nutcracker", videoURL: video(1),
+        Post(id: "post_9", authorID: "u_kenji", placeID: yosemite, climbID: "c_nutcracker", videoURL: video(1),
              routeName: "Nutcracker", discipline: .trad,
              grade: Grade(system: .yds, value: "5.8"), sendStyle: .onsight,
              caption: "Took the kids' godfather up his first Valley multipitch.",
              createdAt: hoursAgo(96), likedBy: ["u_priya"]),
-        Post(id: "post_11", authorID: "u_priya", placeID: "p_yosemite", climbID: "c_midnight_lightning",
+        Post(id: "post_11", authorID: "u_priya", placeID: yosemite, climbID: "c_midnight_lightning",
              videoURL: video(2),
              routeName: "Midnight Lightning", discipline: .boulder,
              grade: Grade(system: .vScale, value: "V8"), proposedGrade: Grade(system: .vScale, value: "V7"),
              sendStyle: .redpoint,
              caption: "Beta: left heel on the lightning bolt, then trust the slap to the lip. Feels V7 if you're tall.",
              createdAt: hoursAgo(150), likedBy: ["u_kenji", "u_sam"]),
-        Post(id: "post_12", authorID: "u_marco", placeID: "p_font", climbID: "c_marie_rose", videoURL: video(3),
-             routeName: "La Marie-Rose", discipline: .boulder,
-             grade: Grade(system: .font, value: "6A"), sendStyle: .flash,
-             caption: "Flashed it on my first Font trip years ago, filmed the lap for a friend. Feet high on the right!",
-             createdAt: hoursAgo(200)),
         // More Yosemite sends, so the crag leaderboard has ties to show.
-        Post(id: "post_13", authorID: "u_alex", placeID: "p_yosemite", climbID: "c_midnight_lightning",
+        Post(id: "post_13", authorID: "u_alex", placeID: yosemite, climbID: "c_midnight_lightning",
              videoURL: video(3), routeName: "Midnight Lightning", discipline: .boulder,
              grade: Grade(system: .vScale, value: "V8"), sendStyle: .redpoint,
              caption: "Finally. The lightning bolt crux is all about the heel.",
              createdAt: hoursAgo(220), likedBy: ["u_sam"]),
-        Post(id: "post_14", authorID: "u_marco", placeID: "p_yosemite", climbID: "c_midnight_lightning",
+        Post(id: "post_14", authorID: "u_marco", placeID: yosemite, climbID: "c_midnight_lightning",
              videoURL: video(1), routeName: "Midnight Lightning", discipline: .boulder,
              grade: Grade(system: .vScale, value: "V8"), proposedGrade: Grade(system: .vScale, value: "V8"),
              sendStyle: .redpoint, caption: "Font training pays off in Camp 4.",
              createdAt: hoursAgo(260)),
-        Post(id: "post_15", authorID: "u_sam", placeID: "p_yosemite", climbID: "c_snake_dike",
+        Post(id: "post_15", authorID: "u_sam", placeID: yosemite, climbID: "c_snake_dike",
              videoURL: video(2), routeName: "Snake Dike", discipline: .trad,
              grade: Grade(system: .yds, value: "5.7"), sendStyle: .onsight,
              caption: "Half Dome summit via the dike. Long day, huge views.",
              createdAt: hoursAgo(300), likedBy: ["u_kenji", "u_jess"]),
-        Post(id: "post_16", authorID: "u_sam", placeID: "p_yosemite", climbID: "c_nutcracker",
+        Post(id: "post_16", authorID: "u_sam", placeID: yosemite, climbID: "c_nutcracker",
              videoURL: video(0), routeName: "Nutcracker", discipline: .trad,
              grade: Grade(system: .yds, value: "5.8"), sendStyle: .onsight,
              caption: "Mantel crux on the last pitch is spicy.",
              createdAt: hoursAgo(310)),
-        Post(id: "post_17", authorID: "u_sam", placeID: "p_yosemite", videoURL: video(3),
+        Post(id: "post_17", authorID: "u_sam", placeID: yosemite, videoURL: video(3),
              routeName: "Blues Brothers", discipline: .boulder,
              grade: Grade(system: .vScale, value: "V4"), sendStyle: .flash,
              caption: "Camp 4 warmup circuit.",
              createdAt: hoursAgo(320)),
-        Post(id: "post_18", authorID: "u_jess", placeID: "p_yosemite", climbID: "c_separate_reality",
+        Post(id: "post_18", authorID: "u_jess", placeID: yosemite, climbID: "c_separate_reality",
              videoURL: video(1), routeName: "Separate Reality", discipline: .trad,
              grade: Grade(system: .yds, value: "5.11d"), sendStyle: .redpoint,
              caption: "Hanging out over the valley on the roof crack. Bucket list ✅",
@@ -184,31 +155,25 @@ enum SampleData {
 
     static let climbs: [Climb] = [
         // Yosemite
-        Climb(id: "c_midnight_lightning", placeID: "p_yosemite", name: "Midnight Lightning", area: "Camp 4",
+        Climb(id: "c_midnight_lightning", placeID: yosemite, name: "Midnight Lightning", area: "Camp 4",
               discipline: .boulder, grade: Grade(system: .vScale, value: "V8"),
               about: "The Columbia Boulder's famous line, marked by the chalk lightning bolt."),
-        Climb(id: "c_nutcracker", placeID: "p_yosemite", name: "Nutcracker", area: "Manure Pile Buttress",
+        Climb(id: "c_nutcracker", placeID: yosemite, name: "Nutcracker", area: "Manure Pile Buttress",
               discipline: .trad, grade: Grade(system: .yds, value: "5.8"),
               about: "Five-pitch Valley classic, one of the first routes climbed clean with nuts."),
-        Climb(id: "c_snake_dike", placeID: "p_yosemite", name: "Snake Dike", area: "Half Dome",
+        Climb(id: "c_snake_dike", placeID: yosemite, name: "Snake Dike", area: "Half Dome",
               discipline: .trad, grade: Grade(system: .yds, value: "5.7")),
-        Climb(id: "c_separate_reality", placeID: "p_yosemite", name: "Separate Reality", area: "Middle Cathedral area",
+        Climb(id: "c_separate_reality", placeID: yosemite, name: "Separate Reality", area: "Middle Cathedral area",
               discipline: .trad, grade: Grade(system: .yds, value: "5.11d")),
-        // Buttermilks
-        Climb(id: "c_iron_man", placeID: "p_buttermilks", name: "Iron Man Traverse", area: "Grandpa Peabody",
+        // Bishop Area (Buttermilks)
+        Climb(id: "c_iron_man", placeID: bishop, name: "Iron Man Traverse", area: "Buttermilks · Grandpa Peabody",
               discipline: .boulder, grade: Grade(system: .vScale, value: "V4")),
-        Climb(id: "c_mandala", placeID: "p_buttermilks", name: "The Mandala", area: "Mandala Boulder",
+        Climb(id: "c_mandala", placeID: bishop, name: "The Mandala", area: "Buttermilks · Mandala Boulder",
               discipline: .boulder, grade: Grade(system: .vScale, value: "V12")),
-        // Fontainebleau
-        Climb(id: "c_marie_rose", placeID: "p_font", name: "La Marie-Rose", area: "Bas Cuvier",
-              discipline: .boulder, grade: Grade(system: .font, value: "6A"),
-              about: "First 6A in Fontainebleau (1946). Polished, famous, mandatory."),
-        Climb(id: "c_rainbow_rocket", placeID: "p_font", name: "Rainbow Rocket", area: "Bas Cuvier",
-              discipline: .boulder, grade: Grade(system: .font, value: "8A")),
         // Red River Gorge
-        Climb(id: "c_amarillo", placeID: "p_rrg", name: "Amarillo Sunset", area: "Drive-By Crag",
+        Climb(id: "c_amarillo", placeID: redRiverGorge, name: "Amarillo Sunset", area: "Drive-By Crag",
               discipline: .sport, grade: Grade(system: .yds, value: "5.11b")),
-        Climb(id: "c_southern_smoke", placeID: "p_rrg", name: "Southern Smoke", area: "Motherlode",
+        Climb(id: "c_southern_smoke", placeID: redRiverGorge, name: "Southern Smoke", area: "Motherlode",
               discipline: .sport, grade: Grade(system: .yds, value: "5.14c")),
     ]
 
@@ -218,12 +183,12 @@ enum SampleData {
         climbs: climbs,
         posts: posts,
         followedPlaces: [
-            "u_sam": [brooklynGym, "p_buttermilks", "p_font"],
+            "u_sam": [brooklynGym, bishop, huecoTanks],
             "u_alex": [brooklynGym, denverGym],
-            "u_jess": ["p_rrg", brooklynGym],
-            "u_marco": ["p_font"],
-            "u_priya": ["p_buttermilks", oaklandGym, "p_yosemite"],
-            "u_kenji": ["p_yosemite", "p_rrg"],
+            "u_jess": [redRiverGorge, brooklynGym],
+            "u_marco": [huecoTanks],
+            "u_priya": [bishop, oaklandGym, yosemite],
+            "u_kenji": [yosemite, redRiverGorge],
         ],
         followedUsers: [
             "u_sam": ["u_alex", "u_jess"],
@@ -235,7 +200,7 @@ enum SampleData {
         ],
         reposts: [
             Repost(id: "r_1", userID: "u_jess", postID: "post_5", createdAt: hoursAgo(3)),
-            Repost(id: "r_2", userID: "u_alex", postID: "post_3", createdAt: hoursAgo(6)),
+            Repost(id: "r_2", userID: "u_alex", postID: "post_4", createdAt: hoursAgo(6)),
         ],
         conversations: [
             Conversation(id: "dm_sam_alex", participantIDs: ["u_sam", "u_alex"]),

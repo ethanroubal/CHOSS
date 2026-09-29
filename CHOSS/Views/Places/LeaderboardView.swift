@@ -191,7 +191,7 @@ private struct AvatarStack: View {
 #Preview {
     NavigationStack {
         ScrollView {
-            LeaderboardView(placeID: "p_yosemite")
+            LeaderboardView(placeID: SampleData.yosemite)
         }
         .withAppRoutes()
     }

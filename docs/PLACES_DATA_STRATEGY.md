@@ -23,6 +23,12 @@ The `Place` model already supports this: `source`, `externalID`, `isVerified`, `
 | **Google Places / Apple Maps (MapKit `MKLocalSearch`)** | Nearly every gym, with fresh hours and addresses | Paid (Google) or free on-device (Apple). Terms mostly forbid storing results permanently | **Use it in the "Add a place" flow** to autocomplete a gym's name and address. Don't use it as the stored source of truth. |
 | **Gym owners** | Their own gym | You control it | A "claim this gym" flow gives a verified badge and lets them post set updates. It's also a good partnership and marketing channel later. |
 
+## Status
+
+Done: the app ships with 1,535 US gyms and 2,128 US outdoor climbing areas from curated
+spreadsheets (`data/`), converted by `scripts/import_gyms_xlsx.py` and `scripts/import_crags_xlsx.py`.
+Individual climbs within crags are still added by users (or seeded from OpenBeta, below).
+
 ## 2. Plan
 
 1. **Seed** (`scripts/import_places.py`):
