@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// Where a home-feed post came from, so the card can say "From Granite Works" vs. a followed climber.
+/// Where a home-feed post came from, so the card can say "Because you follow Movement Gowanus" vs. a followed climber.
 enum FeedReason: Hashable {
     case followedPlace(Place.ID)
     case followedUser

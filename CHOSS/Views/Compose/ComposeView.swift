@@ -395,5 +395,5 @@ struct VideoRecorder: UIViewControllerRepresentable {
 }
 
 #Preview {
-    ComposeView(initialPlaceID: "p_granite_works").environment(AppStore.preview)
+    ComposeView(initialPlaceID: SampleData.brooklynGym).environment(AppStore.preview)
 }

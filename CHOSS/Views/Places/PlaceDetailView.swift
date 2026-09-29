@@ -229,7 +229,7 @@ struct PlaceDetailView: View {
 
 #Preview {
     NavigationStack {
-        PlaceDetailView(placeID: "p_granite_works")
+        PlaceDetailView(placeID: SampleData.brooklynGym)
             .withAppRoutes()
     }
     .environment(AppStore.preview)

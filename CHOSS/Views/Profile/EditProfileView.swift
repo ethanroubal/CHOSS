@@ -128,7 +128,7 @@ struct EditProfileView: View {
         }
     }
 
-    /// "Granite Works, Buttermilk Boulders" or "Choose up to 3".
+    /// "Movement Gowanus, Buttermilk Boulders" or "Choose up to 3".
     private var homePlacesSummary: String {
         let names = user.homePlaceIDs.compactMap { store.place($0)?.name }
         return names.isEmpty ? "Choose up to \(User.maxHomePlaces)" : names.joined(separator: ", ")

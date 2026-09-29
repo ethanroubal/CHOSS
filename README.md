@@ -68,5 +68,5 @@ to a real backend means writing one new repository type.
 
 1. A real backend (Supabase recommended; see the strategy doc) with auth, video upload and transcoding, and a paginated feed.
 2. Seed places with `scripts/import_places.py` and add duplicate detection for user-added places.
-3. Autoplaying muted video in the feed, push notifications ("3 new sends at Granite Works"), and gym owner accounts.
+3. Autoplaying muted video in the feed, push notifications ("3 new sends at Movement Gowanus"), and gym owner accounts.
 4. Tests for `AppStore` feed logic.

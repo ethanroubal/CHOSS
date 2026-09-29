@@ -5,27 +5,16 @@ import Foundation
 enum SampleData {
     static let currentUserID: User.ID = "u_sam"
 
-    /// Sample gyms/crags used by the demo posts, plus every gym in the bundled US gym list.
-    static let places: [Place] = featuredPlaces + BundledGyms.places.filter { gym in
-        !featuredPlaces.contains { $0.id == gym.id }
-    }
+    /// Every gym in the bundled US gym list, plus the sample outdoor crags.
+    static let places: [Place] = BundledGyms.places + crags
 
-    private static let featuredPlaces: [Place] = [
-        Place(id: "p_granite_works", name: "Granite Works Climbing", kind: .gym,
-              city: "Brooklyn", region: "NY", country: "USA",
-              latitude: 40.6782, longitude: -73.9942,
-              disciplines: [.boulder, .sport, .topRope],
-              about: "Bouldering and roped climbing with a fresh set every Tuesday."),
-        Place(id: "p_crux_collective", name: "Crux Collective", kind: .gym,
-              city: "Oakland", region: "CA", country: "USA",
-              latitude: 37.8044, longitude: -122.2712,
-              disciplines: [.boulder],
-              about: "Bouldering-only gym. Comp-style resets every other week."),
-        Place(id: "p_high_point", name: "High Point Bouldering", kind: .gym,
-              city: "Denver", region: "CO", country: "USA",
-              latitude: 39.7392, longitude: -104.9903,
-              disciplines: [.boulder, .sport],
-              about: "Steep walls, a 45° board, and a 50 ft lead wall."),
+    // Real gyms from the bundled list that the demo users and posts use.
+    // (IDs come from scripts/import_gyms_xlsx.py: name + coordinates.)
+    static let brooklynGym = "p_gym_movement_gowanus_fadad8"             // Movement Gowanus
+    static let oaklandGym = "p_gym_great_western_power_company_touchstone_e47cf1"  // Touchstone GWPC
+    static let denverGym = "p_gym_the_spot_denver_49ae62"                 // The Spot Denver
+
+    private static let crags: [Place] = [
         Place(id: "p_rrg", name: "Red River Gorge", kind: .crag,
               city: "Slade", region: "KY", country: "USA",
               latitude: 37.8331, longitude: -83.6827,
@@ -50,11 +39,11 @@ enum SampleData {
 
     static let users: [User] = [
         User(id: "u_sam", username: "sam.sends", displayName: "Sam Rivera",
-             bio: "Plastic puller, occasional crag rat. Projecting V7.", homePlaceIDs: ["p_granite_works", "p_buttermilks"],
+             bio: "Plastic puller, occasional crag rat. Projecting V7.", homePlaceIDs: [brooklynGym, "p_buttermilks"],
              boulderRange: GradeRange(system: .vScale, low: "V5", high: "V6"),
              ropeRange: GradeRange(system: .yds, low: "5.11b", high: "5.11d")),
         User(id: "u_alex", username: "alexcrimps", displayName: "Alex Chen",
-             bio: "Crimps > slopers. Route setter.", homePlaceIDs: ["p_granite_works", "p_high_point"],
+             bio: "Crimps > slopers.", homePlaceIDs: [brooklynGym, denverGym],
              boulderRange: GradeRange(system: .vScale, low: "V7", high: "V8")),
         User(id: "u_jess", username: "jess_on_rock", displayName: "Jess Okafor",
              bio: "Sport climbing and road trips.", homePlaceIDs: ["p_rrg"],
@@ -63,7 +52,7 @@ enum SampleData {
              bio: "Font every winter.", homePlaceIDs: ["p_font"],
              boulderRange: GradeRange(system: .font, low: "7A", high: "7B"), showsGradeRange: false),
         User(id: "u_priya", username: "priyaclimbs", displayName: "Priya Nair",
-             bio: "Highball enjoyer.", homePlaceIDs: ["p_buttermilks", "p_crux_collective", "p_yosemite"],
+             bio: "Highball enjoyer.", homePlaceIDs: ["p_buttermilks", oaklandGym, "p_yosemite"],
              boulderRange: GradeRange(system: .vScale, low: "V6", high: nil)),
         User(id: "u_kenji", username: "kenji_k", displayName: "Kenji Watanabe",
              bio: "Trad dad. Cracks only.", homePlaceIDs: ["p_yosemite"]),
@@ -95,10 +84,10 @@ enum SampleData {
     }
 
     private static let rawPosts: [Post] = [
-        Post(id: "post_1", authorID: "u_alex", placeID: "p_granite_works", videoURL: video(0),
+        Post(id: "post_1", authorID: "u_alex", placeID: brooklynGym, videoURL: video(0),
              routeName: "Blue Crimp Traverse", discipline: .boulder,
              grade: Grade(system: .vScale, value: "V6"), sendStyle: .flash,
-             caption: "Set this one yesterday and it went first try 😅 Heel hook at the lip is key.",
+             caption: "New blue problem went first try 😅 Heel hook at the lip is key.",
              createdAt: hoursAgo(2), likedBy: ["u_sam", "u_jess"],
              comments: [Comment(id: "c_1", authorID: "u_sam", text: "That heel is sick", createdAt: hoursAgo(1))]),
         Post(id: "post_2", authorID: "u_jess", placeID: "p_rrg", climbID: "c_amarillo", videoURL: video(1),
@@ -122,13 +111,13 @@ enum SampleData {
              grade: Grade(system: .vScale, value: "V8"), sendStyle: .redpoint,
              caption: "Ten years of trying. Camp 4 legend finally goes.",
              createdAt: hoursAgo(30), likedBy: ["u_sam", "u_jess", "u_alex", "u_marco"]),
-        Post(id: "post_6", authorID: "u_sam", placeID: "p_granite_works", videoURL: video(1),
+        Post(id: "post_6", authorID: "u_sam", placeID: brooklynGym, videoURL: video(1),
              routeName: "Pink Dyno", discipline: .boulder,
              grade: Grade(system: .vScale, value: "V5"), proposedGrade: Grade(system: .vScale, value: "V6"),
              sendStyle: .redpoint,
              caption: "Stuck the dyno on attempt 23. Sandbagged, this is V6 all day.",
              createdAt: hoursAgo(40), likedBy: ["u_alex"]),
-        Post(id: "post_7", authorID: "u_alex", placeID: "p_high_point", videoURL: video(2),
+        Post(id: "post_7", authorID: "u_alex", placeID: denverGym, videoURL: video(2),
              routeName: "Board Problem #112", discipline: .boulder,
              grade: nil, proposedGrade: Grade(system: .vScale, value: "V7"), sendStyle: .redpoint,
              caption: "Visiting Denver. Ungraded board problem, felt about V7.",
@@ -186,10 +175,10 @@ enum SampleData {
              grade: Grade(system: .yds, value: "5.11d"), sendStyle: .redpoint,
              caption: "Hanging out over the valley on the roof crack. Bucket list ✅",
              createdAt: hoursAgo(340), likedBy: ["u_kenji", "u_sam", "u_priya"]),
-        Post(id: "post_10", authorID: "u_priya", placeID: "p_crux_collective", videoURL: video(0),
+        Post(id: "post_10", authorID: "u_priya", placeID: oaklandGym, videoURL: video(0),
              routeName: "Yellow Comp Slab", discipline: .boulder,
              grade: Grade(system: .vScale, value: "V5"), sendStyle: .flash,
-             caption: "Slab day at Crux. Trust your feet.",
+             caption: "Slab day. Trust your feet.",
              createdAt: hoursAgo(120)),
     ]
 
@@ -229,11 +218,11 @@ enum SampleData {
         climbs: climbs,
         posts: posts,
         followedPlaces: [
-            "u_sam": ["p_granite_works", "p_buttermilks", "p_font"],
-            "u_alex": ["p_granite_works", "p_high_point"],
-            "u_jess": ["p_rrg", "p_granite_works"],
+            "u_sam": [brooklynGym, "p_buttermilks", "p_font"],
+            "u_alex": [brooklynGym, denverGym],
+            "u_jess": ["p_rrg", brooklynGym],
             "u_marco": ["p_font"],
-            "u_priya": ["p_buttermilks", "p_crux_collective", "p_yosemite"],
+            "u_priya": ["p_buttermilks", oaklandGym, "p_yosemite"],
             "u_kenji": ["p_yosemite", "p_rrg"],
         ],
         followedUsers: [
