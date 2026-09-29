@@ -44,6 +44,17 @@ STATE_ABBR = {
 }
 TERRITORY_ABBR = {"PR": "PR", "GU": "GU", "VI": "VI"}
 
+# Rows in the spreadsheet that are the same gym listed twice (same coordinates). The first name
+# is kept; the others are dropped so followers and posts aren't split across two pages.
+DUPLICATES = {
+    "Climbing Wall at Winona State": ["Winona State University"],
+    "Movement Plano": ["Movement The Plano Training Center"],
+    "University of North Carolina (Rams Head Climbing Wall, Fetzer Climbing Wall)": [
+        "University of North Carolina (Kenan-Flagler Business School)",
+    ],
+}
+DROPPED = {dup: keep for keep, dups in DUPLICATES.items() for dup in dups}
+
 BOULDER_ONLY = re.compile(r"\b(boulder(ing)?|bloc|block|bouldering)\b", re.I)
 
 
@@ -90,7 +101,13 @@ def main():
     col = {name: header.index(name) for name in ("name", "latitude", "longitude")}
 
     towns, coords = load_towns()
-    places, skipped, far = [], [], 0
+    names_in_sheet = {str(r[col["name"]]).strip() for r in rows[1:] if r[col["name"]]}
+    for keep, dups in DUPLICATES.items():
+        missing = [n for n in [keep, *dups] if n not in names_in_sheet]
+        if missing:
+            print(f"warning: duplicate rule mentions names not in the sheet: {missing}")
+
+    places, skipped, far, merged = [], [], 0, 0
     seen_ids = set()
     for row in rows[1:]:
         name = (row[col["name"]] or "").strip() if isinstance(row[col["name"]], str) else row[col["name"]]
@@ -102,6 +119,9 @@ def main():
             continue
         if not name or not (-90 <= lat <= 90 and -180 <= lon <= 180):
             skipped.append(row)
+            continue
+        if name in DROPPED:
+            merged += 1
             continue
 
         city, state, km = nearest_town(lat, lon, towns, coords)
@@ -133,7 +153,8 @@ def main():
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(places, ensure_ascii=False, separators=(",", ":")) + "\n")
     print(f"{len(places)} gyms -> {args.out.relative_to(ROOT)}"
-          f" ({far} without a town within {MAX_TOWN_KM} km, {len(skipped)} rows skipped)")
+          f" ({merged} duplicates merged, {far} without a town within {MAX_TOWN_KM} km,"
+          f" {len(skipped)} rows skipped)")
 
 
 if __name__ == "__main__":
