@@ -58,3 +58,42 @@ extension AppStore {
         averageGrade(for: post)?.grade ?? climb(post.climbID)?.grade
     }
 }
+
+/// A route people have posted at a gym (or you've posted without a place). Gym climbs aren't a
+/// fixed list like outdoor climbs, so "the same climb" is the same route name at the same place.
+struct KnownRoute: Identifiable, Hashable {
+    let name: String
+    let discipline: ClimbDiscipline
+    let postCount: Int
+    let grade: Grade?
+    var id: String { NameMatcher.normalize(name) }
+}
+
+extension AppStore {
+    /// Routes already posted at a place (not linked to an outdoor climb), most-posted first.
+    /// With no place, it's the current user's own untagged routes.
+    func knownRoutes(at placeID: Place.ID?) -> [KnownRoute] {
+        let candidates = posts.filter { post in
+            post.climbID == nil && !post.routeName.trimmingCharacters(in: .whitespaces).isEmpty
+                && post.placeID == placeID && (placeID != nil || post.authorID == currentUserID)
+        }
+        let groups = Dictionary(grouping: candidates) { NameMatcher.normalize($0.routeName) }
+        return groups.values.compactMap { group -> KnownRoute? in
+            guard let latest = group.first else { return nil }  // posts are newest first
+            let disciplines = Dictionary(grouping: group, by: \.discipline)
+            let discipline = disciplines.max { $0.value.count < $1.value.count }?.key ?? latest.discipline
+            return KnownRoute(name: latest.routeName, discipline: discipline,
+                              postCount: group.count, grade: displayGrade(for: latest))
+        }
+        .sorted { lhs, rhs in
+            lhs.postCount != rhs.postCount ? lhs.postCount > rhs.postCount : lhs.name < rhs.name
+        }
+    }
+
+    /// Whether the current user has already posted a full send of the same climb as `post`.
+    func hasSent(sameClimbAs post: Post) -> Bool {
+        postsOfSameClimb(as: post).contains {
+            $0.id != post.id && $0.authorID == currentUserID && $0.sendStyle.countsAsSend
+        }
+    }
+}

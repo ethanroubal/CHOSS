@@ -16,6 +16,9 @@ struct ComposeView: View {
     @State private var errorMessage: String?
     @State private var previewPlayer: AVPlayer?
     @FocusState private var isEditingText: Bool
+    /// The picked climb is new (nobody has posted it), so discipline and style are up to you.
+    @State private var routeIsNew = false
+    @State private var styleWasAutoFilled = false
 
     init(initialPlaceID: Place.ID? = nil, initialClimbID: Climb.ID? = nil) {
         var draft = PostDraft()
@@ -67,13 +70,18 @@ struct ComposeView: View {
             .onAppear {
                 // Opened from a climb's page: fill in its details.
                 if let climb = store.climb(draft.climbID), draft.routeName.isEmpty {
-                    link(climb)
+                    apply(.climb(climb, isNew: false))
                 }
             }
             .onChange(of: draft.placeID) { _, placeID in
                 // A climb belongs to one crag; changing the place unlinks it.
                 if let climb = store.climb(draft.climbID), climb.placeID != placeID {
-                    unlinkClimb()
+                    clearRoute()
+                } else if draft.climbID == nil, !draft.routeName.isEmpty {
+                    // A gym route belongs to its gym: at the new place it may be new.
+                    let key = NameMatcher.normalize(draft.routeName)
+                    routeIsNew = !store.knownRoutes(at: placeID).contains { $0.id == key }
+                    if routeIsNew { undoAutoStyle() } else { autoFillStyle() }
                 }
             }
             .onChange(of: pickerItem) { _, item in
@@ -172,26 +180,15 @@ struct ComposeView: View {
 
     private var climbSection: some View {
         Section {
-            if let crag = taggedCrag {
-                if let climb = store.climb(draft.climbID) {
-                    NavigationLink {
-                        ClimbPickerView(placeID: crag.id) { link($0) }
-                    } label: {
-                        ClimbRow(climb: climb)
-                    }
-                    Button("Unlink climb", role: .destructive) { unlinkClimb() }
-                } else {
-                    NavigationLink {
-                        ClimbPickerView(placeID: crag.id) { link($0) }
-                    } label: {
-                        Label("Search for the climb at \(crag.name)", systemImage: "magnifyingglass")
-                    }
-                    TextField("Or just type a name", text: $draft.routeName)
-                        .focused($isEditingText)
-                }
-            } else {
-                TextField("Route / problem name", text: $draft.routeName)
-                    .focused($isEditingText)
+            // The route name is picked from the place's climbs (or added as new), not free-typed,
+            // so sends of the same climb land together.
+            NavigationLink {
+                RoutePickerView(placeID: draft.placeID) { apply($0) }
+            } label: {
+                routeLabel
+            }
+            if !draft.routeName.isEmpty {
+                Button("Clear climb", role: .destructive) { clearRoute() }
             }
 
             Picker("Discipline", selection: $draft.discipline) {
@@ -205,12 +202,98 @@ struct ComposeView: View {
         } header: {
             Text("Climb")
         } footer: {
-            if let climb = store.climb(draft.climbID) {
+            if routeIsNew {
+                Text("New climb: choose its discipline and how you sent it.")
+            } else if let climb = store.climb(draft.climbID) {
                 Text("Your video will show up on \(climb.name)'s page, where people look for beta.")
+            } else if !draft.routeName.isEmpty {
+                Text("Discipline and style were filled in from this climb. Change them if they're wrong.")
             } else if taggedCrag != nil {
                 Text("Pick the climb so your video shows up when people search it for beta.")
             }
         }
+    }
+
+    @ViewBuilder
+    private var routeLabel: some View {
+        if let climb = store.climb(draft.climbID) {
+            ClimbRow(climb: climb)
+        } else if !draft.routeName.isEmpty {
+            HStack {
+                Label(draft.routeName, systemImage: draft.discipline.symbolName)
+                if routeIsNew {
+                    Text("New")
+                        .font(.caption2.bold())
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.accentColor.opacity(0.15), in: Capsule())
+                        .foregroundStyle(.tint)
+                }
+            }
+        } else {
+            Label("Problem / route name", systemImage: "magnifyingglass")
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    /// Fills the draft from the picked climb. Existing climbs set the discipline (and "Repeat"
+    /// if you've sent it before); new climbs leave discipline and style to you.
+    private func apply(_ choice: RouteChoice) {
+        switch choice {
+        case .climb(let climb, let isNew):
+            link(climb)
+            routeIsNew = isNew
+            if !isNew { autoFillStyle() }
+        case .known(let route):
+            draft.climbID = nil
+            draft.routeName = route.name
+            draft.discipline = route.discipline
+            if let grade = route.grade, route.discipline.gradeSystems.contains(grade.system) {
+                draft.gradeSystem = grade.system
+            } else if !route.discipline.gradeSystems.contains(draft.gradeSystem) {
+                draft.gradeSystem = route.discipline.defaultGradeSystem
+            }
+            if draft.proposedGrade?.system != draft.gradeSystem { draft.proposedGrade = nil }
+            routeIsNew = false
+            autoFillStyle()
+        case .new(let name):
+            draft.climbID = nil
+            draft.routeName = name
+            routeIsNew = true
+            undoAutoStyle()
+        }
+    }
+
+    /// Onsight / flash are personal, so the only style we can infer is "Repeat": you've already
+    /// posted a send of this climb.
+    private func autoFillStyle() {
+        if store.hasSent(sameClimbAs: draftProbe) {
+            draft.sendStyle = .repeatSend
+            styleWasAutoFilled = true
+        } else {
+            undoAutoStyle()
+        }
+    }
+
+    private func undoAutoStyle() {
+        if styleWasAutoFilled && draft.sendStyle == .repeatSend {
+            draft.sendStyle = .redpoint
+        }
+        styleWasAutoFilled = false
+    }
+
+    private func clearRoute() {
+        draft.climbID = nil
+        draft.routeName = ""
+        routeIsNew = false
+        undoAutoStyle()
+    }
+
+    /// The draft as a post, for "same climb" lookups (average grade, previous sends).
+    private var draftProbe: Post {
+        Post(id: "draft", authorID: store.currentUserID, placeID: draft.placeID,
+             climbID: draft.climbID, routeName: draft.routeName, discipline: draft.discipline,
+             sendStyle: draft.sendStyle, caption: "", createdAt: .now)
     }
 
     /// Links the send to an outdoor climb and fills in its name and discipline, and uses the
@@ -226,11 +309,6 @@ struct ComposeView: View {
         if draft.proposedGrade?.system != draft.gradeSystem {
             draft.proposedGrade = nil
         }
-    }
-
-    private func unlinkClimb() {
-        draft.climbID = nil
-        draft.routeName = ""
     }
 
     /// You only propose a grade. The climb's grade is the average of everyone's proposals.
@@ -263,9 +341,7 @@ struct ComposeView: View {
     /// The climb's grade before this post: the average of existing proposals for the same climb
     /// (linked outdoor climb, or the same route name at this place), else the guidebook grade.
     private var currentClimbGrade: (grade: Grade, detail: String)? {
-        let probe = Post(id: "draft", authorID: store.currentUserID, placeID: draft.placeID,
-                         climbID: draft.climbID, routeName: draft.routeName, discipline: draft.discipline,
-                         sendStyle: draft.sendStyle, caption: "", createdAt: .now)
+        let probe = draftProbe
         guard store.climbKey(for: probe) != nil else { return nil }
         if let average = store.averageGrade(for: probe) {
             return (average.grade, average.count == 1 ? "from 1 proposal" : "avg of \(average.count)")
