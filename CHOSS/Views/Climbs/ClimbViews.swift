@@ -271,13 +271,14 @@ struct ClimbPickerView: View {
     }
 }
 
-/// Add a climb that isn't listed yet. Warns about likely duplicates first.
+/// Add a climb that isn't listed yet. The crag is picked from the crag directory (searchable),
+/// pre-filled when opened from a crag. Warns about likely duplicates first.
 struct AddClimbView: View {
     @Environment(AppStore.self) private var store
     @Environment(\.dismiss) private var dismiss
-    let placeID: Place.ID
     let onAdded: (Climb) -> Void
 
+    @State private var cragID: Place.ID?
     @State private var name: String
     @State private var area = ""
     @State private var discipline: ClimbDiscipline
@@ -286,8 +287,10 @@ struct AddClimbView: View {
     @State private var about = ""
     @State private var isSaving = false
 
-    init(placeID: Place.ID, suggestedName: String = "", onAdded: @escaping (Climb) -> Void) {
-        self.placeID = placeID
+    /// - Parameter placeID: the crag to pre-select (e.g. when adding from a crag's page), or nil
+    ///   to let the climber choose.
+    init(placeID: Place.ID? = nil, suggestedName: String = "", onAdded: @escaping (Climb) -> Void) {
+        _cragID = State(initialValue: placeID)
         self.onAdded = onAdded
         _name = State(initialValue: suggestedName)
         let discipline = ClimbDiscipline.boulder
@@ -298,6 +301,31 @@ struct AddClimbView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    NavigationLink {
+                        CragPickerView(selection: $cragID)
+                    } label: {
+                        if let crag = store.place(cragID) {
+                            HStack(spacing: 12) {
+                                PlaceIconView(place: crag, size: 36)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(crag.name).font(.headline)
+                                    Text(crag.locationLine).font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
+                        } else {
+                            Label("Choose the crag", systemImage: "mountain.2")
+                                .foregroundStyle(.tint)
+                        }
+                    }
+                } header: {
+                    Text("Crag")
+                } footer: {
+                    if cragID == nil {
+                        Text("Search the crag directory so the climb lands on the right crag's page.")
+                    }
+                }
+
                 Section {
                     TextField("Climb name", text: $name)
                         .autocorrectionDisabled()
@@ -352,7 +380,14 @@ struct AddClimbView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Add", action: save)
                         .bold()
-                        .disabled(trimmedName.isEmpty || isSaving)
+                        .disabled(trimmedName.isEmpty || cragID == nil || isSaving)
+                }
+            }
+            .onChange(of: cragID) { _, _ in
+                // Areas and disciplines belong to the crag; reset what no longer fits.
+                if !knownAreas.contains(area) { area = "" }
+                if let first = disciplines.first, !disciplines.contains(discipline) {
+                    discipline = first
                 }
             }
             .onChange(of: discipline) { _, newValue in
@@ -378,27 +413,29 @@ struct AddClimbView: View {
 
     /// The crag's disciplines (all of them if the crag doesn't say).
     private var disciplines: [ClimbDiscipline] {
-        let listed = store.place(placeID)?.disciplines ?? []
+        let listed = store.place(cragID)?.disciplines ?? []
         return listed.isEmpty ? ClimbDiscipline.allCases : listed
     }
 
     private var knownAreas: [String] {
-        Array(Set(store.climbs(at: placeID).map(\.area).filter { !$0.isEmpty })).sorted()
+        guard let cragID else { return [] }
+        return Array(Set(store.climbs(at: cragID).map(\.area).filter { !$0.isEmpty })).sorted()
     }
 
     /// An existing climb here with a very similar name.
     private var likelyDuplicate: Climb? {
-        guard trimmedName.count >= 3 else { return nil }
-        return store.climbs(at: placeID).first { climb in
+        guard trimmedName.count >= 3, let cragID else { return nil }
+        return store.climbs(at: cragID).first { climb in
             (NameMatcher.score(query: trimmedName, climb: climb) ?? 0) >= 80
         }
     }
 
     private func save() {
+        guard let cragID else { return }
         isSaving = true
         let climb = Climb(
             id: "c_\(UUID().uuidString)",
-            placeID: placeID,
+            placeID: cragID,
             name: trimmedName,
             area: area.trimmingCharacters(in: .whitespacesAndNewlines),
             discipline: discipline,
@@ -415,6 +452,73 @@ struct AddClimbView: View {
             }
             isSaving = false
         }
+    }
+}
+
+/// Search the crag directory (crags only): typo-tolerant, by name or nearby town,
+/// best match first; return picks it. Followed crags come first before you type.
+struct CragPickerView: View {
+    @Environment(AppStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    @Binding var selection: Place.ID?
+
+    @State private var query = ""
+
+    var body: some View {
+        let results = crags
+
+        List {
+            Section(query.isEmpty ? "Crags" : "Results") {
+                ForEach(Array(results.enumerated()), id: \.element.id) { index, crag in
+                    Button {
+                        selection = crag.id
+                        dismiss()
+                    } label: {
+                        HStack {
+                            PlaceRow(place: crag)
+                            if index == 0 && !query.isEmpty {
+                                Text("Best match")
+                                    .font(.caption2.bold())
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.accentColor.opacity(0.15), in: Capsule())
+                                    .foregroundStyle(.tint)
+                            }
+                            if selection == crag.id {
+                                Image(systemName: "checkmark").foregroundStyle(.tint)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .overlay {
+            if results.isEmpty && !query.isEmpty {
+                ContentUnavailableView.search(text: query)
+            }
+        }
+        .navigationTitle("Choose a crag")
+        .navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
+                    prompt: "Search crags by name or town")
+        .autocorrectionDisabled()
+        .onSubmit(of: .search) {
+            if let best = results.first, !query.isEmpty {
+                selection = best.id
+                dismiss()
+            }
+        }
+    }
+
+    private var crags: [Place] {
+        guard query.trimmingCharacters(in: .whitespaces).isEmpty else {
+            return store.searchPlaces(query).filter { $0.kind == .crag }
+        }
+        let followed = store.followedPlaces(of: store.currentUserID).filter { $0.kind == .crag }
+        let others = store.popularPlaces(kind: .crag).filter { !followed.contains($0) }
+        return followed + others
     }
 }
 

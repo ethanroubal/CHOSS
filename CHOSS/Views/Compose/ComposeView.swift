@@ -217,6 +217,8 @@ struct ComposeView: View {
     /// scale the climb is graded in so your proposal averages in with everyone else's.
     private func link(_ climb: Climb) {
         draft.climbID = climb.id
+        // The climb may have been added to a different crag in "Add a climb"; follow it there.
+        draft.placeID = climb.placeID
         draft.routeName = climb.name
         draft.discipline = climb.discipline
         let climbGrade = store.averageGrade(forClimb: climb.id)?.grade ?? climb.grade

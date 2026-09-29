@@ -13,6 +13,7 @@ struct SearchView: View {
 
     @State private var query = ""
     @State private var scope: Scope = .places
+    @State private var addingClimb = false
 
     var body: some View {
         NavigationStack {
@@ -26,6 +27,12 @@ struct SearchView: View {
                     // Outdoor climbs across all crags: open one to see everyone's beta videos.
                     ForEach(store.searchClimbs(query)) { climb in
                         NavigationLink(value: Route.climb(climb.id)) { ClimbRow(climb: climb, showsCrag: true) }
+                    }
+                    Button {
+                        addingClimb = true
+                    } label: {
+                        Label(query.isEmpty ? "Add a climb" : "Can't find it? Add “\(query)”",
+                              systemImage: "plus.circle")
                     }
                 case .climbers:
                     ForEach(store.searchUsers(query)) { user in
@@ -55,6 +62,10 @@ struct SearchView: View {
             .searchable(text: $query, prompt: "Gyms, crags, climbs, climbers")
             .searchScopes($scope, activation: .onSearchPresentation) {
                 ForEach(Scope.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .sheet(isPresented: $addingClimb) {
+                // No crag pre-selected here: the climber searches for it in the form.
+                AddClimbView(suggestedName: query) { _ in }
             }
             .withAppRoutes()
         }
