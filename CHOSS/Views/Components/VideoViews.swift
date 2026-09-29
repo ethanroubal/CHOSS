@@ -34,8 +34,7 @@ struct VideoThumbnailView: View {
                     .resizable()
                     .scaledToFill()
             } else {
-                Image(systemName: post.discipline.symbolName)
-                    .font(.largeTitle)
+                DisciplineIcon(discipline: post.discipline, size: 40)
                     .foregroundStyle(.white.opacity(0.8))
             }
         }

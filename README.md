@@ -40,6 +40,7 @@ The source logos live in `brand/`. `scripts/generate_brand_assets.py` (needs `pi
 
 - **AppIcon:** the hold icon, full-bleed 1024×1024.
 - **Wordmark:** "CHOSS" in forest green, with a cream version for dark mode. Used as the Home header, the bottom-of-page footer, the splash screen, and profile setup.
+- **Discipline icons:** hold (bouldering), quickdraw (sport), cam (trad) and top-rope anchor, cut from `brand/discipline-icons-source.png` into tintable images (`DisciplineBoulder`, `…Sport`, `…Trad`, `…TopRope`, plus `…Large`).
 - **HoldMark / HoldMarkLarge:** the hold shape alone, as a tintable image. Used for the Home tab button, the splash screen, and the empty feed.
 - **Colors:** BrandGreen `#1D2A1E`, BrandCream `#F3EDE1`, the accent (forest green, lighter sage in dark mode), and OnAccent for text drawn on the accent.
 

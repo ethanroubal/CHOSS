@@ -96,6 +96,35 @@ struct PostGradeBadge: View {
     }
 }
 
+/// A discipline's icon (hold / quickdraw / cam / top-rope anchor), tinted by the foreground style.
+struct DisciplineIcon: View {
+    let discipline: ClimbDiscipline
+    var size: CGFloat = 20
+
+    var body: some View {
+        Image(size > 28 ? discipline.iconName + "Large" : discipline.iconName)
+            .resizable()
+            .renderingMode(.template)
+            .interpolation(.high)
+            .scaledToFit()
+            .frame(width: size, height: size)
+            .accessibilityLabel(discipline.displayName)
+    }
+}
+
+/// Text with the discipline's icon, for pickers and menus.
+struct DisciplineLabel: View {
+    let discipline: ClimbDiscipline
+
+    var body: some View {
+        Label {
+            Text(discipline.displayName)
+        } icon: {
+            Image(discipline.iconName)
+        }
+    }
+}
+
 /// "V4–V6 · 5.11b–5.11d" chips for a climber's self-reported level.
 struct GradeRangeChips: View {
     let ranges: [GradeRange]
@@ -103,8 +132,11 @@ struct GradeRangeChips: View {
     var body: some View {
         HStack(spacing: 6) {
             ForEach(ranges, id: \.self) { range in
-                Label(range.display, systemImage: range.system == .vScale || range.system == .font
-                      ? ClimbDiscipline.boulder.symbolName : ClimbDiscipline.sport.symbolName)
+                Label {
+                    Text(range.display)
+                } icon: {
+                    DisciplineIcon(discipline: range.system.category == .boulder ? .boulder : .sport, size: 14)
+                }
                     .font(.caption.bold().monospacedDigit())
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)

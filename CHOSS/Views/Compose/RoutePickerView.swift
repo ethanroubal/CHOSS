@@ -137,8 +137,7 @@ private struct KnownRouteRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: route.discipline.symbolName)
-                .font(.title3)
+            DisciplineIcon(discipline: route.discipline, size: 26)
                 .foregroundStyle(.tint)
                 .frame(width: 32)
             VStack(alignment: .leading, spacing: 2) {

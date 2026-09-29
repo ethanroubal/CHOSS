@@ -192,7 +192,7 @@ struct ComposeView: View {
             }
 
             Picker("Discipline", selection: $draft.discipline) {
-                ForEach(ClimbDiscipline.allCases) { Text($0.displayName).tag($0) }
+                ForEach(ClimbDiscipline.allCases) { DisciplineLabel(discipline: $0).tag($0) }
             }
             .disabled(draft.climbID != nil)
 
@@ -220,7 +220,11 @@ struct ComposeView: View {
             ClimbRow(climb: climb)
         } else if !draft.routeName.isEmpty {
             HStack {
-                Label(draft.routeName, systemImage: draft.discipline.symbolName)
+                Label {
+                    Text(draft.routeName)
+                } icon: {
+                    DisciplineIcon(discipline: draft.discipline)
+                }
                 if routeIsNew {
                     Text("New")
                         .font(.caption2.bold())

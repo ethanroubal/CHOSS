@@ -73,18 +73,23 @@ struct ExploreView: View {
     private var disciplineChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack {
-                chip("All", systemImage: "square.grid.2x2", isOn: discipline == nil) { discipline = nil }
+                chip("All", isOn: discipline == nil) {
+                    Image(systemName: "square.grid.2x2")
+                } action: { discipline = nil }
                 ForEach(ClimbDiscipline.allCases) { d in
-                    chip(d.displayName, systemImage: d.symbolName, isOn: discipline == d) { discipline = d }
+                    chip(d.displayName, isOn: discipline == d) {
+                        DisciplineIcon(discipline: d, size: 18)
+                    } action: { discipline = d }
                 }
             }
             .padding(.horizontal)
         }
     }
 
-    private func chip(_ title: String, systemImage: String, isOn: Bool, action: @escaping () -> Void) -> some View {
+    private func chip<Icon: View>(_ title: String, isOn: Bool, @ViewBuilder icon: () -> Icon,
+                                  action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Label(title, systemImage: systemImage)
+            Label { Text(title) } icon: { icon() }
                 .font(.subheadline.weight(.medium))
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)

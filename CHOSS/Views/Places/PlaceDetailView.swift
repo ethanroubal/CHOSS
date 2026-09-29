@@ -129,7 +129,7 @@ struct PlaceDetailView: View {
                 Menu {
                     Picker("Discipline", selection: $discipline) {
                         Text("All").tag(ClimbDiscipline?.none)
-                        ForEach(place.disciplines) { Text($0.displayName).tag(ClimbDiscipline?.some($0)) }
+                        ForEach(place.disciplines) { DisciplineLabel(discipline: $0).tag(ClimbDiscipline?.some($0)) }
                     }
                 } label: {
                     Label(discipline?.displayName ?? "All", systemImage: "line.3.horizontal.decrease.circle")

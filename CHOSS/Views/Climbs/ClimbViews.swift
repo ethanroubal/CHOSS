@@ -11,8 +11,7 @@ struct ClimbRow: View {
         let videos = store.posts(ofClimb: climb.id).count
 
         HStack(spacing: 12) {
-            Image(systemName: climb.discipline.symbolName)
-                .font(.title3)
+            DisciplineIcon(discipline: climb.discipline, size: 26)
                 .foregroundStyle(.tint)
                 .frame(width: 32)
             VStack(alignment: .leading, spacing: 2) {
@@ -293,7 +292,7 @@ struct AddClimbView: View {
 
                 Section("Climb") {
                     Picker("Discipline", selection: $discipline) {
-                        ForEach(disciplines) { Text($0.displayName).tag($0) }
+                        ForEach(disciplines) { DisciplineLabel(discipline: $0).tag($0) }
                     }
                     if discipline.gradeSystems.count > 1 {
                         Picker("Scale", selection: $gradeSystem) {

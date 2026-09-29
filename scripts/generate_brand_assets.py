@@ -10,6 +10,7 @@ Writes into CHOSS/Assets.xcassets:
   HoldMark     the climbing-hold shape alone, as a tintable template (tab bar, small marks)
   Wordmark     "CHOSS" on transparent: forest green in light mode, cream in dark mode
   BrandGreen / BrandCream color sets
+  DisciplineBoulder / Sport / Trad / TopRope  climbing-type icons (from discipline-icons-source.png)
 """
 import json
 from pathlib import Path
@@ -188,6 +189,76 @@ def colors():
     color_set("OnAccent", (255, 255, 255), GREEN)
 
 
+# --- Discipline icons ---------------------------------------------------------
+
+# name in the source sheet (2x2 grid: icon above a text label) -> asset name
+DISCIPLINE_ICONS = [
+    ("boulder", "DisciplineBoulder", (0, 0)),
+    ("sport", "DisciplineSport", (1, 0)),
+    ("trad", "DisciplineTrad", (0, 1)),
+    ("topRope", "DisciplineTopRope", (1, 1)),
+]
+
+
+def discipline_icons():
+    """Cut the four icons out of brand/discipline-icons-source.png as tintable template images."""
+    src = np.asarray(Image.open(BRAND / "discipline-icons-source.png").convert("L")).astype(float)
+    h, w = src.shape
+    # Black artwork on white: full alpha below 100, fading out by 200 (keeps edges smooth).
+    alpha = np.clip((200 - src) / 100, 0, 1)
+    for _, asset, (col, row) in DISCIPLINE_ICONS:
+        x0, x1 = col * w // 2, (col + 1) * w // 2
+        y0, y1 = (0, h // 2 - 20) if row == 0 else (h // 2 - 20, h)
+        cell = alpha[y0:y1, x0:x1]
+        # Drop the text label: keep only the tallest band of ink (the icon).
+        ink_rows = np.where(cell.max(axis=1) > 0.5)[0]
+        bands, start, prev = [], ink_rows[0], ink_rows[0]
+        for r in ink_rows[1:]:
+            if r > prev + 8:
+                bands.append((start, prev))
+                start = r
+            prev = r
+        bands.append((start, prev))
+        top, bottom = max(bands, key=lambda b: b[1] - b[0])
+        icon = cell[top:bottom + 1]
+        cols = np.where(icon.max(axis=0) > 0.02)[0]
+        icon = icon[:, cols[0]:cols[-1] + 1]
+        # Square canvas with a little padding, so every icon sits the same in a frame.
+        side = int(max(icon.shape) * 1.08)
+        canvas = np.zeros((side, side))
+        oy, ox = (side - icon.shape[0]) // 2, (side - icon.shape[1]) // 2
+        canvas[oy:oy + icon.shape[0], ox:ox + icon.shape[1]] = icon
+        rgba = np.zeros((side, side, 4), dtype=np.uint8)
+        rgba[..., 3] = (canvas * 255).round().astype(np.uint8)
+        img = Image.fromarray(rgba, "RGBA")
+
+        base = f"{asset[0].lower()}{asset[1:]}"
+        # 20pt @1x/2x/3x: menus and labels use images at their natural size.
+        folder = ASSETS / f"{asset}.imageset"
+        folder.mkdir(parents=True, exist_ok=True)
+        for old in folder.glob("*.png"):
+            old.unlink()
+        images = []
+        for scale in (1, 2, 3):
+            name = f"{base}@{scale}x.png"
+            img.resize((20 * scale, 20 * scale), Image.LANCZOS).save(folder / name, optimize=True)
+            images.append({"filename": name, "idiom": "universal", "scale": f"{scale}x"})
+        write_contents(folder, {
+            "images": images,
+            "info": {"author": "xcode", "version": 1},
+            "properties": {"template-rendering-intent": "template"},  # tinted like SF Symbols
+        })
+        # Large version for big placements (video placeholders), drawn resizable.
+        large = ASSETS / f"{asset}Large.imageset"
+        large.mkdir(parents=True, exist_ok=True)
+        img.resize((240, 240), Image.LANCZOS).save(large / f"{base}-large.png", optimize=True)
+        write_contents(large, {
+            "images": [{"filename": f"{base}-large.png", "idiom": "universal"}],
+            "info": {"author": "xcode", "version": 1},
+            "properties": {"template-rendering-intent": "template"},
+        })
+
+
 if __name__ == "__main__":
     wordmark()
     square, outside = icon_square()
@@ -195,4 +266,5 @@ if __name__ == "__main__":
     app_logo(square, outside)
     hold_mark(square)
     colors()
+    discipline_icons()
     print("Brand assets written to", ASSETS)
