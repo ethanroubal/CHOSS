@@ -114,6 +114,8 @@ struct ClimbDetailView: View {
 
     private func header(_ climb: Climb) -> some View {
         VStack(alignment: .leading, spacing: 8) {
+            // Profile picture: the most-liked community photo (mountain placeholder until then).
+            ClimbIconView(climb: climb, size: 72)
             HStack(alignment: .firstTextBaseline) {
                 Text(climb.name).font(.title.bold())
                 if let grade = store.averageGrade(forClimb: climb.id)?.grade ?? climb.grade {
@@ -140,6 +142,7 @@ struct ClimbDetailView: View {
             if !climb.about.isEmpty {
                 Text(climb.about).font(.subheadline)
             }
+            CommunityPhotosBar(subject: .climb(climb.id), title: climb.name)
         }
         .padding(.horizontal)
         .padding(.top, 8)

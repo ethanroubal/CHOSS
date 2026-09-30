@@ -36,6 +36,8 @@ final class AppStore {
     private(set) var followedPlaces: [User.ID: Set<Place.ID>] = [:]
     private(set) var followedUsers: [User.ID: Set<User.ID>] = [:]
     private(set) var reposts: [Repost] = []
+    /// Pictures people added to places' and climbs' pages.
+    private(set) var communityPhotos: [CommunityPhoto] = []
 
     // MARK: Derived lookups
     // Kept in sync by `rebuildLookups()` (on load) and by each mutation, so reads are
@@ -111,6 +113,7 @@ final class AppStore {
         followedPlaces = snapshot.followedPlaces
         followedUsers = snapshot.followedUsers
         reposts = snapshot.reposts
+        communityPhotos = snapshot.communityPhotos
         rebuildLookups()
         rebuildSearchIndexes()
         isLoaded = true
@@ -423,6 +426,69 @@ final class AppStore {
             perform { [repository] in
                 try await repository.addRepost(repost)
             }
+        }
+    }
+
+    // MARK: - Community photos
+
+    /// A place's or climb's photos, most liked first (newest first among equals).
+    func communityPhotos(of subject: PhotoSubject) -> [CommunityPhoto] {
+        communityPhotos
+            .filter { $0.subject == subject }
+            .sorted { ($0.likedBy.count, $0.createdAt) > ($1.likedBy.count, $1.createdAt) }
+    }
+
+    /// The page's profile picture: its most-liked community photo (nil: use the placeholder).
+    func coverPhoto(of subject: PhotoSubject) -> CommunityPhoto? {
+        communityPhotos(of: subject).first
+    }
+
+    func isPhotoLiked(_ photoID: CommunityPhoto.ID) -> Bool {
+        communityPhotos.first { $0.id == photoID }?.likedBy.contains(currentUserID) ?? false
+    }
+
+    /// Saves the image and adds it to the subject's photos.
+    @discardableResult
+    func addCommunityPhoto(_ imageData: Data, to subject: PhotoSubject) async -> Bool {
+        guard let url = PhotoStorage.save(imageData) else {
+            lastError = "Couldn't read that photo."
+            return false
+        }
+        let photo = CommunityPhoto(id: UUID().uuidString, subject: subject, authorID: currentUserID,
+                                   imageURL: url, createdAt: .now)
+        do {
+            try await repository.addCommunityPhoto(photo)
+            communityPhotos.insert(photo, at: 0)
+            return true
+        } catch {
+            PhotoStorage.delete(url)
+            lastError = error.localizedDescription
+            return false
+        }
+    }
+
+    /// Only the person who added a photo can remove it.
+    func deleteCommunityPhoto(_ photoID: CommunityPhoto.ID) {
+        guard let index = communityPhotos.firstIndex(where: { $0.id == photoID }),
+              communityPhotos[index].authorID == currentUserID else { return }
+        let photo = communityPhotos.remove(at: index)
+        perform { [repository] in
+            try await repository.deleteCommunityPhoto(photoID)
+            PhotoStorage.delete(photo.imageURL)
+        }
+    }
+
+    func togglePhotoLike(_ photoID: CommunityPhoto.ID) {
+        guard let index = communityPhotos.firstIndex(where: { $0.id == photoID }) else { return }
+        let me = currentUserID
+        let like = !communityPhotos[index].likedBy.contains(me)
+        if like {
+            communityPhotos[index].likedBy.insert(me)
+        } else {
+            communityPhotos[index].likedBy.remove(me)
+        }
+        perform { [repository] in
+            try await repository.setPhotoLike(photoID: photoID, liked: like, by: me)
         }
     }
 

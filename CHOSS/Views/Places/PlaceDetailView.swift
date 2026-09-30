@@ -130,6 +130,8 @@ struct PlaceDetailView: View {
                 if !place.about.isEmpty {
                     Text(place.about).font(.subheadline).padding(.top, 2)
                 }
+                CommunityPhotosBar(subject: .place(place.id), title: place.name)
+                    .padding(.top, 4)
             }
         }
         .padding(.horizontal)

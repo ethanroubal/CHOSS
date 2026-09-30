@@ -82,4 +82,21 @@ actor MockClimbingRepository: ClimbingRepository {
     func removeRepost(postID: Post.ID, by userID: User.ID) async throws {
         snapshot.reposts.removeAll { $0.postID == postID && $0.userID == userID }
     }
+
+    func addCommunityPhoto(_ photo: CommunityPhoto) async throws {
+        snapshot.communityPhotos.append(photo)
+    }
+
+    func deleteCommunityPhoto(_ photoID: CommunityPhoto.ID) async throws {
+        snapshot.communityPhotos.removeAll { $0.id == photoID }
+    }
+
+    func setPhotoLike(photoID: CommunityPhoto.ID, liked: Bool, by userID: User.ID) async throws {
+        guard let index = snapshot.communityPhotos.firstIndex(where: { $0.id == photoID }) else { return }
+        if liked {
+            snapshot.communityPhotos[index].likedBy.insert(userID)
+        } else {
+            snapshot.communityPhotos[index].likedBy.remove(userID)
+        }
+    }
 }

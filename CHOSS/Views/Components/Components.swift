@@ -43,19 +43,29 @@ struct AvatarView: View {
     }
 }
 
+/// A place's profile picture: its most-liked community photo, or the building / mountain
+/// placeholder until someone adds one.
 struct PlaceIconView: View {
+    @Environment(AppStore.self) private var store
     let place: Place
     var size: CGFloat = 44
 
     var body: some View {
-        RoundedRectangle(cornerRadius: size * 0.25, style: .continuous)
-            .fill(Color.seeded(place.id).gradient)
-            .frame(width: size, height: size)
-            .overlay {
-                Image(systemName: place.kind.symbolName)
-                    .font(.system(size: size * 0.45))
-                    .foregroundStyle(.white)
-            }
+        let shape = RoundedRectangle(cornerRadius: size * 0.25, style: .continuous)
+        if let cover = store.coverPhoto(of: .place(place.id)) {
+            CommunityPhotoImage(photo: cover)
+                .frame(width: size, height: size)
+                .clipShape(shape)
+        } else {
+            shape
+                .fill(Color.seeded(place.id).gradient)
+                .frame(width: size, height: size)
+                .overlay {
+                    Image(systemName: place.kind.symbolName)
+                        .font(.system(size: size * 0.45))
+                        .foregroundStyle(.white)
+                }
+        }
     }
 }
 
