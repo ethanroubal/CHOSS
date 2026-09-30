@@ -14,7 +14,25 @@ struct PlaceDetailView: View {
         var id: Self { self }
     }
 
+    /// How a crag's climbs are ordered while browsing (a search is ordered by best match).
+    private enum ClimbSort: String, CaseIterable, Identifiable {
+        case popularity = "Most sends"
+        case area = "Area"
+        case difficulty = "Difficulty"
+        var id: Self { self }
+
+        var symbolName: String {
+            switch self {
+            case .popularity: "flame"
+            case .area: "map"
+            case .difficulty: "chart.bar"
+            }
+        }
+    }
+
     @State private var tab: Tab = .sends
+    @State private var climbSort: ClimbSort = .popularity
+    @State private var hardestFirst = true
     @State private var discipline: ClimbDiscipline?
     @State private var climbQuery = ""
     @State private var composing = false
@@ -178,7 +196,8 @@ struct PlaceDetailView: View {
         }
     }
 
-    /// Searchable list of the crag's climbs. With no query, grouped by area (wall / boulder field).
+    /// Searchable list of the crag's climbs. While browsing, sorted by most sends, grouped by area
+    /// (wall / boulder field), or by difficulty (hardest or easiest first); a search is best match first.
     @ViewBuilder
     private func climbList(_ place: Place) -> some View {
         let results = store.searchClimbs(climbQuery, at: place.id)
@@ -201,6 +220,10 @@ struct PlaceDetailView: View {
             .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             .padding(.horizontal)
 
+            if climbQuery.isEmpty && !results.isEmpty {
+                sortControls
+            }
+
             if results.isEmpty {
                 ContentUnavailableView {
                     Label(climbQuery.isEmpty ? "No climbs listed yet" : "No climb matches “\(climbQuery)”",
@@ -209,17 +232,21 @@ struct PlaceDetailView: View {
                     Text("Add it so everyone's videos of it end up in one place.")
                 }
             } else if climbQuery.isEmpty {
-                let areas = Dictionary(grouping: results, by: \.area)
-                ForEach(areas.keys.sorted(), id: \.self) { area in
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(area.isEmpty ? "Other" : area)
-                            .font(.subheadline.bold())
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal)
-                            .padding(.bottom, 4)
-                        ForEach(areas[area] ?? []) { climb in
-                            climbLink(climb)
-                        }
+                switch climbSort {
+                case .popularity:
+                    // `searchClimbs` with no query is already most-sent first.
+                    VStack(spacing: 0) {
+                        ForEach(results) { climb in climbLink(climb) }
+                    }
+                case .area:
+                    let areas = Dictionary(grouping: results, by: \.area)
+                    ForEach(areas.keys.sorted { areaSortKey($0) < areaSortKey($1) }, id: \.self) { area in
+                        climbGroup(area.isEmpty ? "Other" : area,
+                                   (areas[area] ?? []).sorted { $0.name < $1.name })
+                    }
+                case .difficulty:
+                    ForEach(difficultyGroups(results), id: \.title) { group in
+                        climbGroup(group.title, group.climbs)
                     }
                 }
             } else {
@@ -237,6 +264,86 @@ struct PlaceDetailView: View {
             }
             .padding(.horizontal)
         }
+    }
+
+    /// Sort picker, plus hardest / easiest first when sorting by difficulty.
+    private var sortControls: some View {
+        HStack {
+            Menu {
+                Picker("Sort climbs", selection: $climbSort) {
+                    ForEach(ClimbSort.allCases) { sort in
+                        Label(sort.rawValue, systemImage: sort.symbolName).tag(sort)
+                    }
+                }
+            } label: {
+                Label("Sort: \(climbSort.rawValue)", systemImage: "arrow.up.arrow.down")
+                    .font(.subheadline.weight(.medium))
+            }
+            Spacer()
+            if climbSort == .difficulty {
+                Picker("Order", selection: $hardestFirst) {
+                    Text("Hardest first").tag(true)
+                    Text("Easiest first").tag(false)
+                }
+                .pickerStyle(.segmented)
+                .fixedSize()
+            }
+        }
+        .padding(.horizontal)
+        .animation(.easeOut(duration: 0.15), value: climbSort)
+    }
+
+    private func climbGroup(_ title: String, _ climbs: [Climb]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(title)
+                .font(.subheadline.bold())
+                .foregroundStyle(.secondary)
+                .padding(.horizontal)
+                .padding(.bottom, 4)
+            ForEach(climbs) { climb in climbLink(climb) }
+        }
+    }
+
+    /// Unnamed areas ("Other") go last.
+    private func areaSortKey(_ area: String) -> String {
+        area.isEmpty ? "\u{10FFFF}" : area.lowercased()
+    }
+
+    private struct ClimbGroup {
+        let title: String
+        let climbs: [Climb]
+    }
+
+    /// Climbs by grade, hardest or easiest first. Boulders, routes, ice and mixed are graded on
+    /// different scales, so each gets its own group (Font is compared as V-scale, French as YDS).
+    /// A climb's grade is the community average, falling back to the guidebook grade; climbs with
+    /// no grade come last.
+    private func difficultyGroups(_ climbs: [Climb]) -> [ClimbGroup] {
+        var graded: [GradeSystem: [(climb: Climb, rank: Int)]] = [:]
+        var ungraded: [Climb] = []
+        for climb in climbs {
+            let grade = store.averageGrade(forClimb: climb.id)?.grade ?? climb.grade
+            // Convert to the category's common scale; mixed (M) grades stay as they are.
+            guard let comparable = grade.map({ $0.canonical ?? $0 }), comparable.rank >= 0 else {
+                ungraded.append(climb)
+                continue
+            }
+            graded[comparable.system, default: []].append((climb: climb, rank: comparable.rank))
+        }
+        let order: [GradeSystem] = [.vScale, .yds, .waterIce, .mixed]
+        var groups = order.compactMap { system -> ClimbGroup? in
+            guard let entries = graded[system], !entries.isEmpty else { return nil }
+            let sorted = entries.sorted { lhs, rhs in
+                if lhs.rank != rhs.rank { return hardestFirst ? lhs.rank > rhs.rank : lhs.rank < rhs.rank }
+                return lhs.climb.name < rhs.climb.name
+            }
+            let title = system == .mixed ? "Mixed" : system.category.displayName
+            return ClimbGroup(title: title, climbs: sorted.map { $0.climb })
+        }
+        if !ungraded.isEmpty {
+            groups.append(ClimbGroup(title: "No grade yet", climbs: ungraded.sorted { $0.name < $1.name }))
+        }
+        return groups
     }
 
     private func climbLink(_ climb: Climb) -> some View {
