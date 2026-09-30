@@ -2,7 +2,7 @@ import SwiftUI
 
 /// "Legends": a place's leaderboards as podiums, under the map on its page, in a section that
 /// folds away (tap the header). 1st stands in the middle on the tallest step, 2nd on the left,
-/// 3rd on the right. Ties share a step: stacked avatars that open a list of usernames.
+/// 3rd on the right. Ties share a step: stacked avatars that open a list of the climbers with their profile pictures.
 ///
 /// - Crags: most climbs sent, plus a hardest-send podium for each discipline that has graded
 ///   sends there (boulder, sport, trad, ice…). Disciplines nobody has sent aren't shown.
@@ -200,6 +200,8 @@ private struct PodiumOccupant: View {
     @Binding var openUserID: User.ID?
 
     @State private var showingTie = false
+    /// Picked in the tie list; opened once the bubble has closed (pushing mid-dismiss can fail).
+    @State private var pendingUserID: User.ID?
 
     var body: some View {
         if tier.isTie {
@@ -221,10 +223,15 @@ private struct PodiumOccupant: View {
             // A small bubble next to the step (not a full sheet) listing everyone tied.
             .popover(isPresented: $showingTie) {
                 TieList(tier: tier) { userID in
+                    pendingUserID = userID
                     showingTie = false
-                    openUserID = userID
                 }
                 .presentationCompactAdaptation(.popover)
+            }
+            .onChange(of: showingTie) { _, isShowing in
+                guard !isShowing, let userID = pendingUserID else { return }
+                pendingUserID = nil
+                openUserID = userID
             }
             .accessibilityLabel("Place \(tier.place): \(tier.entries.count) climbers tied at \(tier.scoreLabel)")
         } else if let entry = tier.entries.first {
