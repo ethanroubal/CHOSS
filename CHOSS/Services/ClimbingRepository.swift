@@ -15,6 +15,16 @@ struct AppSnapshot {
     var communityPhotos: [CommunityPhoto] = []
 }
 
+enum RepositoryError: LocalizedError {
+    case notAllowed
+
+    var errorDescription: String? {
+        switch self {
+        case .notAllowed: "You can only do that to things you added."
+        }
+    }
+}
+
 /// The backend boundary. `MockClimbingRepository` backs the app today; a real
 /// implementation (Supabase / Firebase / custom API) can be dropped in without touching views.
 protocol ClimbingRepository: Sendable {
@@ -36,6 +46,8 @@ protocol ClimbingRepository: Sendable {
     func addRepost(_ repost: Repost) async throws
     func removeRepost(postID: Post.ID, by userID: User.ID) async throws
     func addCommunityPhoto(_ photo: CommunityPhoto) async throws
-    func deleteCommunityPhoto(_ photoID: CommunityPhoto.ID) async throws
+    /// Removes a photo. Only the person who added it may; anyone else gets
+    /// `RepositoryError.notAllowed` (a real backend must enforce this server-side too).
+    func deleteCommunityPhoto(_ photoID: CommunityPhoto.ID, by userID: User.ID) async throws
     func setPhotoLike(photoID: CommunityPhoto.ID, liked: Bool, by userID: User.ID) async throws
 }

@@ -87,7 +87,9 @@ actor MockClimbingRepository: ClimbingRepository {
         snapshot.communityPhotos.append(photo)
     }
 
-    func deleteCommunityPhoto(_ photoID: CommunityPhoto.ID) async throws {
+    func deleteCommunityPhoto(_ photoID: CommunityPhoto.ID, by userID: User.ID) async throws {
+        guard let photo = snapshot.communityPhotos.first(where: { $0.id == photoID }) else { return }
+        guard photo.authorID == userID else { throw RepositoryError.notAllowed }
         snapshot.communityPhotos.removeAll { $0.id == photoID }
     }
 

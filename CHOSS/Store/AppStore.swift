@@ -467,14 +467,21 @@ final class AppStore {
         }
     }
 
-    /// Only the person who added a photo can remove it.
+    /// Whether the current user may delete a photo: only the person who added it.
+    func canDelete(_ photo: CommunityPhoto) -> Bool {
+        photo.authorID == currentUserID
+    }
+
+    /// Only the person who added a photo can remove it. The check happens here and again in the
+    /// repository (the backend), so the Delete buttons being hidden isn't the only safeguard.
     func deleteCommunityPhoto(_ photoID: CommunityPhoto.ID) {
         guard let index = communityPhotos.firstIndex(where: { $0.id == photoID }),
-              communityPhotos[index].authorID == currentUserID else { return }
+              canDelete(communityPhotos[index]) else { return }
         let photo = communityPhotos.remove(at: index)
+        let me = currentUserID
         perform { [repository] in
-            try await repository.deleteCommunityPhoto(photoID)
-            PhotoStorage.delete(photo.imageURL)
+            try await repository.deleteCommunityPhoto(photoID, by: me)
+            PhotoStorage.delete(photo.imageURL)  // only once the backend agreed
         }
     }
 

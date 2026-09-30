@@ -227,7 +227,7 @@ private struct PhotoTile: View {
                 }
             }
             .contextMenu {
-                if photo.authorID == store.currentUserID {
+                if store.canDelete(photo) {
                     Button("Delete photo", systemImage: "trash", role: .destructive) {
                         store.deleteCommunityPhoto(photo.id)
                     }
@@ -298,7 +298,7 @@ private struct PhotoViewer: View {
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Done") { dismiss() }
                     }
-                    if photo.authorID == store.currentUserID {
+                    if store.canDelete(photo) {
                         ToolbarItem(placement: .destructiveAction) {
                             Button("Delete", role: .destructive) {
                                 store.deleteCommunityPhoto(photo.id)
