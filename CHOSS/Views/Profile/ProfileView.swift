@@ -161,7 +161,8 @@ struct ProfileView: View {
                     }
                 }
             }
-            let hardest = store.hardestGrades(for: user.id)
+            // Optional: climbers can hide it in Edit profile.
+            let hardest = user.showsHardestSend ? store.hardestGrades(for: user.id) : []
             if !hardest.isEmpty {
                 HStack(spacing: 6) {
                     Text("Hardest send:").font(.subheadline).foregroundStyle(.secondary)

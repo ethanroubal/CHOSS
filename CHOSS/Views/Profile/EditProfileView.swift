@@ -92,6 +92,12 @@ struct EditProfileView: View {
                 } footer: {
                     Text("Your grade tells people what kind of climber you are. Hide it any time; it's still used to suggest climbs and places.")
                 }
+
+                Section {
+                    Toggle("Show my hardest send on my profile", isOn: $user.showsHardestSend)
+                } footer: {
+                    Text("Your hardest send is worked out from the sends you post. Hiding it doesn't remove you from crag leaderboards.")
+                }
             }
             .onChange(of: photoItem) { _, item in
                 guard let item else { return }

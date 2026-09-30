@@ -16,6 +16,8 @@ struct User: Identifiable, Codable, Hashable {
     var ropeRange: GradeRange? = nil
     /// Whether the grade ranges appear on the public profile.
     var showsGradeRange: Bool = true
+    /// Whether "Hardest send" (worked out from your posts) appears on your profile.
+    var showsHardestSend: Bool = true
 
     /// Ranges that should be shown to other people.
     var visibleGradeRanges: [GradeRange] {
