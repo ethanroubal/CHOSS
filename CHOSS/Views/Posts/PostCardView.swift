@@ -148,11 +148,14 @@ struct PostCardView: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(.tint)
-                } else {
-                    Text(post.routeName.isEmpty ? "Unnamed route" : post.routeName)
+                } else if !post.routeName.isEmpty {
+                    Text(post.routeName)
                         .font(.subheadline.bold())
                 }
-                Text("· \(post.discipline.displayName)")
+                // Gym climbs don't have names, so the discipline stands alone there.
+                Text(post.climbID == nil && post.routeName.isEmpty
+                     ? post.discipline.displayName
+                     : "· \(post.discipline.displayName)")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }

@@ -126,7 +126,7 @@ private struct SendRow: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
-                    Text(post.routeName.isEmpty ? "Unnamed route" : post.routeName).font(.headline).lineLimit(1)
+                    Text(post.routeName.isEmpty ? "\(post.discipline.displayName) send" : post.routeName).font(.headline).lineLimit(1)
                     PostGradeBadge(post: post)
                 }
                 Text([store.user(post.authorID)?.username, store.place(post.placeID)?.name]

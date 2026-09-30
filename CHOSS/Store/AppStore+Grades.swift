@@ -64,53 +64,7 @@ extension AppStore {
     }
 }
 
-/// A route people have posted at a gym (or you've posted without a place). Gym climbs aren't a
-/// fixed list like outdoor climbs, so "the same climb" is the same route name at the same place.
-struct KnownRoute: Identifiable, Hashable {
-    let name: String
-    let discipline: ClimbDiscipline
-    let postCount: Int
-    let grade: Grade?
-    /// The gym it's at (nil for your own untagged routes).
-    var placeID: Place.ID? = nil
-    /// Identifies it everywhere (see `AppStore.climbKey(for:)`).
-    var climbKey: String = ""
-    /// Unique within one place's list.
-    var id: String { NameMatcher.normalize(name) }
-}
-
 extension AppStore {
-    /// Routes already posted at a place (not linked to an outdoor climb), most-posted first.
-    /// With no place, it's the current user's own untagged routes.
-    func knownRoutes(at placeID: Place.ID?) -> [KnownRoute] {
-        // Only this place's posts (or your own), not every post.
-        let pool = placeID.map { posts(at: $0) } ?? posts(by: currentUserID)
-        let candidates = pool.filter { post in
-            post.climbID == nil && !post.routeName.trimmingCharacters(in: .whitespaces).isEmpty
-                && post.placeID == placeID
-        }
-        let groups = Dictionary(grouping: candidates) { NameMatcher.normalize($0.routeName) }
-        return groups.values.compactMap { knownRoute(from: $0) }
-        .sorted { lhs, rhs in
-            lhs.postCount != rhs.postCount ? lhs.postCount > rhs.postCount : lhs.name < rhs.name
-        }
-    }
-
-    /// A gym route (or untagged route) by its climb key, e.g. from `searchRouteKeys(_:)`.
-    func knownRoute(forKey key: String) -> KnownRoute? {
-        knownRoute(from: (postIDsByClimbKey[key] ?? []).compactMap { post($0) })
-    }
-
-    /// Summarizes the posts of one route (newest first).
-    private func knownRoute(from group: [Post]) -> KnownRoute? {
-        guard let latest = group.first, latest.climbID == nil else { return nil }
-        let disciplines = Dictionary(grouping: group, by: \.discipline)
-        let discipline = disciplines.max { $0.value.count < $1.value.count }?.key ?? latest.discipline
-        return KnownRoute(name: latest.routeName, discipline: discipline,
-                          postCount: group.count, grade: displayGrade(for: latest),
-                          placeID: latest.placeID, climbKey: climbKey(for: latest) ?? "")
-    }
-
     /// Whether the current user has already posted a full send of the same climb as `post`.
     func hasSent(sameClimbAs post: Post) -> Bool {
         postsOfSameClimb(as: post).contains {

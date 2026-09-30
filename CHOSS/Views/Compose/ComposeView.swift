@@ -27,6 +27,9 @@ struct ComposeView: View {
         _draft = State(initialValue: draft)
     }
 
+    /// Gym climbs don't have names (for now), so the route field is greyed out.
+    private var isGymTagged: Bool { store.place(draft.placeID)?.kind == .gym }
+
     private var taggedCrag: Place? {
         store.place(draft.placeID).flatMap { $0.kind == .crag ? $0 : nil }
     }
@@ -77,11 +80,6 @@ struct ComposeView: View {
                 // A climb belongs to one crag; changing the place unlinks it.
                 if let climb = store.climb(draft.climbID), climb.placeID != placeID {
                     clearRoute()
-                } else if draft.climbID == nil, !draft.routeName.isEmpty {
-                    // A gym route belongs to its gym: at the new place it may be new.
-                    let key = NameMatcher.normalize(draft.routeName)
-                    routeIsNew = !store.knownRoutes(at: placeID).contains { $0.id == key }
-                    if routeIsNew { undoAutoStyle() } else { autoFillStyle() }
                 }
             }
             .onChange(of: pickerItem) { _, item in
@@ -180,14 +178,21 @@ struct ComposeView: View {
 
     private var climbSection: some View {
         Section {
-            // The route name is picked from the place's climbs (or added as new), not free-typed,
-            // so sends of the same climb land together.
-            NavigationLink {
-                RoutePickerView(placeID: draft.placeID) { apply($0) }
-            } label: {
-                routeLabel
+            // Only outdoor climbs have names (for now), picked from the climb list (or added as
+            // new) rather than free-typed, so sends of the same climb land together.
+            if isGymTagged {
+                LabeledContent("Problem / route") {
+                    Text("Outdoor climbs only")
+                }
+                .foregroundStyle(.tertiary)
+            } else {
+                NavigationLink {
+                    RoutePickerView(placeID: draft.placeID) { apply($0) }
+                } label: {
+                    routeLabel
+                }
             }
-            if !draft.routeName.isEmpty {
+            if !draft.routeName.isEmpty && !isGymTagged {
                 Button("Clear climb", role: .destructive) { clearRoute() }
             }
 
@@ -202,12 +207,12 @@ struct ComposeView: View {
         } header: {
             Text("Climb")
         } footer: {
-            if routeIsNew {
+            if isGymTagged {
+                Text("Gym climbs don't have names. Pick the discipline and how you sent it.")
+            } else if routeIsNew {
                 Text("New climb: choose its discipline and how you sent it.")
             } else if let climb = store.climb(draft.climbID) {
                 Text("Your video will show up on \(climb.name)'s page, where people look for beta.")
-            } else if !draft.routeName.isEmpty {
-                Text("Discipline and style were filled in from this climb. Change them if they're wrong.")
             } else if taggedCrag != nil {
                 Text("Pick the climb so your video shows up when people search it for beta.")
             }
@@ -248,25 +253,6 @@ struct ComposeView: View {
             link(climb)
             routeIsNew = isNew
             if !isNew { autoFillStyle() }
-        case .known(let route):
-            draft.climbID = nil
-            // Picked from every gym's routes: tag that gym.
-            if let placeID = route.placeID { draft.placeID = placeID }
-            draft.routeName = route.name
-            draft.discipline = route.discipline
-            if let grade = route.grade, route.discipline.gradeSystems.contains(grade.system) {
-                draft.gradeSystem = grade.system
-            } else if !route.discipline.gradeSystems.contains(draft.gradeSystem) {
-                draft.gradeSystem = route.discipline.defaultGradeSystem
-            }
-            if draft.proposedGrade?.system != draft.gradeSystem { draft.proposedGrade = nil }
-            routeIsNew = false
-            autoFillStyle()
-        case .new(let name):
-            draft.climbID = nil
-            draft.routeName = name
-            routeIsNew = true
-            undoAutoStyle()
         }
     }
 
