@@ -120,17 +120,18 @@ struct ExploreView: View {
     /// Outdoor climbs with the most videos (beta), for the selected discipline.
     @ViewBuilder
     private var climbCarousel: some View {
-        let climbs = store.mostFilmedClimbIDs()
+        // Walks the cached ranking lazily and stops after 15 matches.
+        let climbs: [Climb] = Array(store.mostFilmedClimbIDs()
             .lazy
             .compactMap { store.climb($0) }
             .filter { discipline == nil || $0.discipline == discipline }
-            .prefix(15)
+            .prefix(15))
         if !climbs.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Popular climbs").font(.title3.bold()).padding(.horizontal)
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 12) {
-                        ForEach(Array(climbs)) { climb in
+                        ForEach(climbs) { climb in
                             NavigationLink(value: Route.climb(climb.id)) {
                                 ClimbCard(climb: climb)
                             }
