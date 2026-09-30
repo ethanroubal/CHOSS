@@ -20,15 +20,11 @@ struct ComposeView: View {
     @State private var routeIsNew = false
     @State private var styleWasAutoFilled = false
 
-    /// A gym route to pre-select (opened from its page).
-    private let initialRoute: KnownRoute?
-
-    init(initialPlaceID: Place.ID? = nil, initialClimbID: Climb.ID? = nil, initialRoute: KnownRoute? = nil) {
+    init(initialPlaceID: Place.ID? = nil, initialClimbID: Climb.ID? = nil) {
         var draft = PostDraft()
         draft.placeID = initialPlaceID
         draft.climbID = initialClimbID
         _draft = State(initialValue: draft)
-        self.initialRoute = initialRoute
     }
 
     private var taggedCrag: Place? {
@@ -75,8 +71,6 @@ struct ComposeView: View {
                 // Opened from a climb's page: fill in its details.
                 if let climb = store.climb(draft.climbID), draft.routeName.isEmpty {
                     apply(.climb(climb, isNew: false))
-                } else if let initialRoute, draft.routeName.isEmpty {
-                    apply(.known(initialRoute))
                 }
             }
             .onChange(of: draft.placeID) { _, placeID in

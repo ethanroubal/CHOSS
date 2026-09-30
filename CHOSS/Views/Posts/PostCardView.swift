@@ -148,14 +148,6 @@ struct PostCardView: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(.tint)
-                } else if !post.routeName.isEmpty, let key = store.climbKey(for: post) {
-                    // Gym route: tap for every video of it at that gym.
-                    NavigationLink(value: Route.route(key)) {
-                        Text(post.routeName)
-                            .font(.subheadline.bold())
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.tint)
                 } else {
                     Text(post.routeName.isEmpty ? "Unnamed route" : post.routeName)
                         .font(.subheadline.bold())
