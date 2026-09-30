@@ -110,6 +110,9 @@ struct ClimbDetailView: View {
                 ContentUnavailableView("Climb not found", systemImage: "mountain.2")
             }
         }
+        .defaultScrollAnchor(.top)
+        // Pull down to load videos (and photos) posted since the page opened.
+        .refreshable { await store.load() }
     }
 
     private func header(_ climb: Climb) -> some View {

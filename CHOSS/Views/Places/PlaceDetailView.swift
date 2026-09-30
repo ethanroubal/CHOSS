@@ -41,65 +41,52 @@ struct PlaceDetailView: View {
     @State private var addingClimb = false
     @State private var showingMap = false
 
-    /// Set once the page has been scrolled to its top on first appearance.
-    @State private var didPinToTop = false
-
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                if let place = store.place(placeID) {
-                    VStack(alignment: .leading, spacing: 14) {
-                        header(place)
-                            .id(Self.topID)
-                        actionRow(place)
-                        mapPreview(place)
+        ScrollView {
+            if let place = store.place(placeID) {
+                VStack(alignment: .leading, spacing: 14) {
+                    header(place)
+                    actionRow(place)
+                    mapPreview(place)
 
-                        // Always on show: crags get both podiums side by side; gyms get most climbs sent.
-                        LeaderboardView(placeID: place.id, showsHardest: place.kind == .crag)
+                    // Always on show: crags get both podiums side by side; gyms get most climbs sent.
+                    LeaderboardView(placeID: place.id, showsHardest: place.kind == .crag)
 
-                        if place.kind == .crag {
-                            Picker("Section", selection: $tab) {
-                                ForEach(Tab.allCases) { Text($0.rawValue).tag($0) }
-                            }
-                            .pickerStyle(.segmented)
-                            .padding(.horizontal)
+                    if place.kind == .crag {
+                        Picker("Section", selection: $tab) {
+                            ForEach(Tab.allCases) { Text($0.rawValue).tag($0) }
                         }
+                        .pickerStyle(.segmented)
+                        .padding(.horizontal)
+                    }
 
-                        switch place.kind == .crag ? tab : .sends {
-                        case .sends: sends(place)
-                        case .climbs: climbList(place)
-                        }
-                        BrandFooter()
+                    switch place.kind == .crag ? tab : .sends {
+                    case .sends: sends(place)
+                    case .climbs: climbList(place)
                     }
-                    .navigationTitle(place.name)
-                    .navigationBarTitleDisplayMode(.inline)
-                    .sheet(isPresented: $composing) {
-                        ComposeView(initialPlaceID: place.id)
-                    }
-                    .fullScreenCover(isPresented: $showingMap) {
-                        PlaceMapView(place: place)
-                    }
-                    .sheet(isPresented: $addingClimb) {
-                        AddClimbView(placeID: place.id, suggestedName: climbQuery) { _ in }
-                    }
-                } else {
-                    ContentUnavailableView("Place not found", systemImage: "mappin.slash")
+                    BrandFooter()
                 }
-            }
-            // Always open at the top (header and map in view), whichever screen opened it.
-            .defaultScrollAnchor(.top)
-            .onAppear {
-                guard !didPinToTop else { return }
-                didPinToTop = true
-                Task { @MainActor in
-                    await Task.yield()  // after the first layout pass
-                    proxy.scrollTo(Self.topID, anchor: .top)
+                .navigationTitle(place.name)
+                .navigationBarTitleDisplayMode(.inline)
+                .sheet(isPresented: $composing) {
+                    ComposeView(initialPlaceID: place.id)
                 }
+                .fullScreenCover(isPresented: $showingMap) {
+                    PlaceMapView(place: place)
+                }
+                .sheet(isPresented: $addingClimb) {
+                    AddClimbView(placeID: place.id, suggestedName: climbQuery) { _ in }
+                }
+            } else {
+                ContentUnavailableView("Place not found", systemImage: "mappin.slash")
             }
         }
+        // Open at the top. (Scrolling programmatically to the header aligned it under the
+        // navigation bar, cutting off the top of the page, so the page just anchors to the top.)
+        .defaultScrollAnchor(.top)
+        // Pull down to load sends (and photos, climbs…) posted since the page opened.
+        .refreshable { await store.load() }
     }
-
-    private static let topID = "place-top"
 
     /// A static preview; tapping it opens the full, interactive map.
     private func mapPreview(_ place: Place) -> some View {
