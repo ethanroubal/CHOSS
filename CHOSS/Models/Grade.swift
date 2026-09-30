@@ -7,6 +7,8 @@ enum ClimbDiscipline: String, Codable, CaseIterable, Identifiable, Hashable {
     case trad
     case topRope
     case ice
+    /// Training boards (Moon, Kilter, Tension…): graded like boulders.
+    case board
     /// Anything that isn't one of the above (deep water solo, aid, a traverse…).
     case other
 
@@ -19,6 +21,7 @@ enum ClimbDiscipline: String, Codable, CaseIterable, Identifiable, Hashable {
         case .trad: "Trad"
         case .topRope: "Top Rope"
         case .ice: "Ice"
+        case .board: "Board"
         case .other: "Other"
         }
     }
@@ -34,21 +37,31 @@ enum ClimbDiscipline: String, Codable, CaseIterable, Identifiable, Hashable {
         case .trad: "DisciplineTrad"
         case .topRope: "DisciplineTopRope"
         case .ice: "DisciplineIce"
-        case .other: ""  // uses `systemImageName`
+        case .board, .other: ""  // uses `systemImageName`
         }
     }
 
     /// SF Symbol for disciplines without a brand icon.
-    var systemImageName: String? { self == .other ? "ellipsis.circle" : nil }
+    var systemImageName: String? {
+        switch self {
+        case .board: "circle.grid.3x3.fill"  // a board's grid of holds
+        case .other: "ellipsis.circle"
+        default: nil
+        }
+    }
 
-    var isRoped: Bool { self != .boulder }
+    var isRoped: Bool { self != .boulder && self != .board }
+
+    /// Board problems have names wherever they're climbed (a gym's board included), unlike other
+    /// gym climbs.
+    var allowsNameAtGym: Bool { self == .board }
 
     /// Sensible default grading system; users can switch (e.g. Font in Europe, M for mixed).
     var defaultGradeSystem: GradeSystem { gradeSystems[0] }
 
     var gradeSystems: [GradeSystem] {
         switch self {
-        case .boulder: [.vScale, .font]
+        case .boulder, .board: [.vScale, .font]
         case .sport, .trad, .topRope: [.yds, .french]
         case .ice: [.waterIce, .mixed]
         // Could be anything, so every scale is offered.

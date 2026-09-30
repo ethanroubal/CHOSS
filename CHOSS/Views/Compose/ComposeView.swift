@@ -30,6 +30,11 @@ struct ComposeView: View {
     /// Gym climbs don't have names (for now), so the route field is greyed out.
     private var isGymTagged: Bool { store.place(draft.placeID)?.kind == .gym }
 
+    /// A board problem not at a crag (at a gym, or untagged): its name is typed in.
+    private var isBoardNamed: Bool {
+        draft.discipline.allowsNameAtGym && draft.climbID == nil && taggedCrag == nil
+    }
+
     private var taggedCrag: Place? {
         store.place(draft.placeID).flatMap { $0.kind == .crag ? $0 : nil }
     }
@@ -85,6 +90,12 @@ struct ComposeView: View {
             .onChange(of: pickerItem) { _, item in
                 guard let item else { return }
                 loadVideo(from: item)
+            }
+            .onChange(of: draft.discipline) { old, new in
+                // A typed board name doesn't carry over to a climb that can't have one.
+                if old.allowsNameAtGym, !new.allowsNameAtGym, draft.climbID == nil {
+                    draft.routeName = ""
+                }
             }
             .onChange(of: draft.discipline) { _, discipline in
                 if !discipline.gradeSystems.contains(draft.gradeSystem) {
@@ -178,24 +189,6 @@ struct ComposeView: View {
 
     private var climbSection: some View {
         Section {
-            // Only outdoor climbs have names (for now), picked from the climb list (or added as
-            // new) rather than free-typed, so sends of the same climb land together.
-            if isGymTagged {
-                LabeledContent("Problem / route") {
-                    Text("Outdoor climbs only")
-                }
-                .foregroundStyle(.tertiary)
-            } else {
-                NavigationLink {
-                    RoutePickerView(placeID: draft.placeID) { apply($0) }
-                } label: {
-                    routeLabel
-                }
-            }
-            if !draft.routeName.isEmpty && !isGymTagged {
-                Button("Clear climb", role: .destructive) { clearRoute() }
-            }
-
             Picker("Discipline", selection: $draft.discipline) {
                 ForEach(ClimbDiscipline.allCases) { DisciplineLabel(discipline: $0).tag($0) }
             }
@@ -204,11 +197,36 @@ struct ComposeView: View {
             Picker("Style", selection: $draft.sendStyle) {
                 ForEach(SendStyle.allCases) { Label($0.displayName, systemImage: $0.symbolName).tag($0) }
             }
+
+            // The name comes after discipline and style. Outdoor climbs are picked from the climb
+            // list (or added as new) so sends of the same climb land together; board problems are
+            // named freely, gym or not; other gym climbs don't have names (for now).
+            if isBoardNamed {
+                TextField("Board problem name (optional)", text: $draft.routeName)
+                    .textInputAutocapitalization(.words)
+                    .submitLabel(.done)
+            } else if isGymTagged {
+                LabeledContent("Problem / route") {
+                    Text("Outdoor climbs and boards only")
+                }
+                .foregroundStyle(.tertiary)
+            } else {
+                NavigationLink {
+                    RoutePickerView(placeID: draft.placeID) { apply($0) }
+                } label: {
+                    routeLabel
+                }
+                if !draft.routeName.isEmpty {
+                    Button("Clear climb", role: .destructive) { clearRoute() }
+                }
+            }
         } header: {
             Text("Climb")
         } footer: {
-            if isGymTagged {
-                Text("Gym climbs don't have names. Pick the discipline and how you sent it.")
+            if isBoardNamed {
+                Text("Name the board problem (e.g. its name on the Moon or Kilter app) so sends of it are grouped together.")
+            } else if isGymTagged {
+                Text("Gym climbs don't have names, except board problems. Pick the discipline and how you sent it.")
             } else if routeIsNew {
                 Text("New climb: choose its discipline and how you sent it.")
             } else if let climb = store.climb(draft.climbID) {
