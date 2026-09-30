@@ -34,6 +34,39 @@ enum Paging {
     }
 }
 
+/// A search box drawn in the page itself (not the navigation bar's search drawer, which can
+/// misplace the list and stop taking taps on screens pushed from a scroll view).
+struct InlineSearchField: View {
+    let prompt: String
+    @Binding var text: String
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+            TextField(prompt, text: $text)
+                .focused($isFocused)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .submitLabel(.search)
+            if !text.isEmpty {
+                Button {
+                    text = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .contentShape(Rectangle())
+        .onTapGesture { isFocused = true }
+    }
+}
+
 /// Placed after the last shown row; asks for the next page when it appears.
 struct LoadMoreRow: View {
     let action: () -> Void

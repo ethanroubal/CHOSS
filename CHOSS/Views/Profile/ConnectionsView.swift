@@ -32,14 +32,6 @@ struct ConnectionsView: View {
 
     var body: some View {
         List {
-            Picker("List", selection: $tab) {
-                ForEach(ConnectionsTab.allCases) { tab in
-                    Text("\(count(tab)) \(tab.title)").tag(tab)
-                }
-            }
-            .pickerStyle(.segmented)
-            .listRowSeparator(.hidden)
-
             switch tab {
             case .followers, .following:
                 let people = matchingPeople
@@ -66,11 +58,25 @@ struct ConnectionsView: View {
             }
         }
         .listStyle(.plain)
+        .scrollDismissesKeyboard(.immediately)
+        // The tabs and search box stay pinned above the list, so the first rows are always
+        // right below them (and never tucked under the navigation bar).
+        .safeAreaInset(edge: .top, spacing: 0) {
+            VStack(spacing: 10) {
+                Picker("List", selection: $tab) {
+                    ForEach(ConnectionsTab.allCases) { tab in
+                        Text("\(count(tab)) \(tab.title)").tag(tab)
+                    }
+                }
+                .pickerStyle(.segmented)
+                InlineSearchField(prompt: prompt, text: $query)
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .background(.bar)
+        }
         .navigationTitle(store.user(userID)?.username ?? "")
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: prompt)
-        .autocorrectionDisabled()
-        .textInputAutocapitalization(.never)
     }
 
     private var prompt: String {
