@@ -130,10 +130,18 @@ struct PostCardView: View {
                 countText(post.likedBy.count, "like", "likes"),
                 countText(store.repostCount(post.id), "repost", "reposts"),
             ].compactMap { $0 }
-            if !counts.isEmpty {
-                Text(counts.joined(separator: " · "))
-                    .font(.subheadline.bold())
+            // Likes and reposts, then views in grey (visible, but quieter).
+            let views = Text("\(post.viewCount.formatted(.number.notation(.compactName))) \(post.viewCount == 1 ? "view" : "views")")
+                .foregroundStyle(.secondary)
+                .fontWeight(.regular)
+            Group {
+                if counts.isEmpty {
+                    views
+                } else {
+                    Text(counts.joined(separator: " · ")) + Text("  ·  ").foregroundStyle(.secondary) + views
+                }
             }
+            .font(.subheadline.bold())
 
             HStack(spacing: 8) {
                 if let grade = store.displayGrade(for: post) {

@@ -28,6 +28,11 @@ actor MockClimbingRepository: ClimbingRepository {
         }
     }
 
+    func recordView(postID: Post.ID, by userID: User.ID) async throws {
+        guard let index = snapshot.posts.firstIndex(where: { $0.id == postID }) else { return }
+        snapshot.posts[index].viewCount += 1
+    }
+
     func setLike(postID: Post.ID, liked: Bool, by userID: User.ID) async throws {
         guard let index = snapshot.posts.firstIndex(where: { $0.id == postID }) else { return }
         if liked {

@@ -244,6 +244,7 @@ private struct PlayerSurface: UIViewRepresentable {
 /// bars on the sides, horizontal ones above and below. The frame is capped at about half the
 /// screen's height so the author above and the likes / comments below stay visible.
 struct SendVideoPlayer: View {
+    @Environment(AppStore.self) private var store
     let post: Post
     var onDoubleTap: () -> Void = {}
 
@@ -361,6 +362,13 @@ struct SendVideoPlayer: View {
             }
             .onChange(of: isMuted) { _, muted in playback.player.isMuted = muted }
             .onChange(of: scenePhase) { _, _ in updatePlayback() }
+            // A view counts once the video has really been on screen (mostly visible, app in the
+            // foreground, not covered) for a moment, so scrolling straight past doesn't count.
+            .task(id: isViewable) {
+                guard isViewable else { return }
+                try? await Task.sleep(for: .seconds(1))
+                if !Task.isCancelled && isViewable { store.recordView(post.id) }
+            }
             .onAppear {
                 isAppeared = true
                 updatePlayback()
@@ -369,6 +377,11 @@ struct SendVideoPlayer: View {
                 isAppeared = false
                 playback.unload()
             }
+    }
+
+    /// Physically on the user's screen right now.
+    private var isViewable: Bool {
+        isOnScreen && isAppeared && !isFullScreen && scenePhase == .active
     }
 
     private func updatePlayback() {
@@ -515,6 +528,10 @@ struct FullScreenVideoView: View {
             playback.unload()
         }
         .onChange(of: isMuted) { _, muted in playback.player.isMuted = muted }
+        .task {
+            try? await Task.sleep(for: .seconds(1))
+            if !Task.isCancelled { store.recordView(post.id) }
+        }
         .onChange(of: store.isLiked(post.id)) { _, liked in
             if liked { likeBurst += 1 }
         }

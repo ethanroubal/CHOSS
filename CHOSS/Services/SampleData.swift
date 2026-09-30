@@ -187,11 +187,19 @@ enum SampleData {
               discipline: .sport, grade: Grade(system: .yds, value: "5.14c")),
     ]
 
+    /// Believable view counts for the demo (a stable number per post, more for liked ones).
+    private static func withSampleViews(_ post: Post) -> Post {
+        var post = post
+        let seed = post.id.unicodeScalars.reduce(0) { $0 + Int($1.value) }
+        post.viewCount = post.likedBy.count * 23 + seed % 60 + 8
+        return post
+    }
+
     static let snapshot = AppSnapshot(
         users: users,
         places: places,
         climbs: climbs,
-        posts: posts,
+        posts: posts.map(withSampleViews),
         followedPlaces: [
             "u_sam": [brooklynGym, bishop, huecoTanks],
             "u_alex": [brooklynGym, denverGym],

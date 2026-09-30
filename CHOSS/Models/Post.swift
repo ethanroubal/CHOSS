@@ -33,6 +33,8 @@ struct Post: Identifiable, Codable, Hashable {
     var createdAt: Date
     var likedBy: Set<User.ID> = []
     var comments: [Comment] = []
+    /// Times the video was actually on someone's screen (see `AppStore.recordView(_:)`).
+    var viewCount: Int = 0
 }
 
 /// Someone re-sharing a post to their own followers.

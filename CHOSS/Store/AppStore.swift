@@ -359,6 +359,22 @@ final class AppStore {
         }
     }
 
+    /// "viewer|post" pairs already counted this session, so rewatching a video during one session
+    /// (scrolling back up, reopening it) counts once. A new session can count it again.
+    @ObservationIgnored private var viewedThisSession: Set<String> = []
+
+    /// Logs a view: called when a video has actually been on screen (see `SendVideoPlayer`).
+    /// Grids of thumbnails never call this. Your own views of your own videos don't count.
+    func recordView(_ postID: Post.ID) {
+        let me = currentUserID
+        guard let index = postPosition(postID), posts[index].authorID != me,
+              viewedThisSession.insert("\(me)|\(postID)").inserted else { return }
+        posts[index].viewCount += 1
+        perform { [repository] in
+            try await repository.recordView(postID: postID, by: me)
+        }
+    }
+
     func addComment(_ text: String, to postID: Post.ID) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, let index = postPosition(postID) else { return }
