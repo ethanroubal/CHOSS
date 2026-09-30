@@ -1,74 +1,120 @@
 import SwiftUI
 
-/// A place's leaderboards as podiums, shown under the map on its page: most different climbs
-/// sent, and (crags only) hardest send (boulders / routes / ice, switchable when the crag has
-/// more than one), side by side. Gyms show just most climbs sent, full width. 1st stands in the middle on the tallest step, 2nd on the left,
-/// 3rd on the right. Ties share a step: stacked avatars that open a list of usernames.
+/// A place's leaderboards as podiums, shown under the map on its page. 1st stands in the middle
+/// on the tallest step, 2nd on the left, 3rd on the right. Ties share a step: stacked avatars
+/// that open a list of usernames.
+///
+/// - Crags: most climbs sent, plus separate hardest-send podiums for **bouldering** and for
+///   **roped** climbing (routes, or ice when the crag has ice sends), since the two are graded
+///   on different scales. Most sends and the first hardest board sit side by side; a second
+///   hardest board goes full width underneath.
+/// - Gyms: just most climbs sent (gym grades vary by gym), full width.
 struct LeaderboardView: View {
     @Environment(AppStore.self) private var store
     let placeID: Place.ID
     /// Crags only: gym grades are set by each gym, so a hardest-send ranking isn't meaningful.
     var showsHardest = true
 
-    @State private var category: GradeCategory?
+    /// Routes or ice on the roped board, when the crag has both.
+    @State private var ropedCategory: GradeCategory?
     /// A climber tapped on a podium (pushed via `navigationDestination`).
     @State private var openUserID: User.ID?
 
     var body: some View {
-        let categories = store.leaderboardCategories(at: placeID)
-        let selected = category.flatMap { categories.contains($0) ? $0 : nil } ?? categories.first
-
+        let boards = hardestBoards
         VStack(alignment: .leading, spacing: 8) {
             Label("Leaderboard", systemImage: "trophy")
                 .font(.headline)
                 .padding(.horizontal)
 
-            HStack(alignment: .top, spacing: 10) {
-                PodiumCard(
-                    title: showsHardest ? "Most sends" : "Most climbs sent",
-                    systemImage: "list.number",
-                    tiers: store.mostSendsLeaderboard(at: placeID),
-                    emptyText: "No sends yet",
-                    openUserID: $openUserID
-                ) {
-                    EmptyView()
+            VStack(spacing: 10) {
+                HStack(alignment: .top, spacing: 10) {
+                    mostSendsCard
+                    if let first = boards.first { hardestCard(first) }
                 }
-
-                if showsHardest {
-                    PodiumCard(
-                        title: "Hardest",
-                        systemImage: "flame",
-                        tiers: selected.map { store.hardestSendLeaderboard(at: placeID, category: $0) } ?? [],
-                        emptyText: "No graded sends yet",
-                        openUserID: $openUserID
-                    ) {
-                        if categories.count > 1, let selected {
-                            Menu {
-                                Picker("Category", selection: Binding(
-                                    get: { selected },
-                                    set: { category = $0 }
-                                )) {
-                                    ForEach(categories) { Text($0.displayName).tag($0) }
-                                }
-                            } label: {
-                                HStack(spacing: 2) {
-                                    Text(selected.displayName)
-                                    Image(systemName: "chevron.down").imageScale(.small)
-                                }
-                                .font(.caption.weight(.semibold))
-                            }
-                        } else if let selected {
-                            Text(selected.displayName)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
+                if boards.count > 1 {
+                    hardestCard(boards[1])
                 }
             }
             .padding(.horizontal)
         }
         .navigationDestination(item: $openUserID) { userID in
             ProfileView(userID: userID)
+        }
+    }
+
+    private enum HardestBoard: Hashable {
+        case bouldering
+        case roped
+    }
+
+    /// Which hardest-send boards this crag gets: each kind of climbing it offers (or that has
+    /// sends), bouldering first. None for gyms.
+    private var hardestBoards: [HardestBoard] {
+        guard showsHardest else { return [] }
+        let present = Set(store.leaderboardCategories(at: placeID))
+        let disciplines = store.place(placeID)?.disciplines ?? []
+        let offersBouldering = disciplines.isEmpty || disciplines.contains { !$0.isRoped }
+        let offersRoped = disciplines.isEmpty || disciplines.contains { $0.isRoped }
+        var boards: [HardestBoard] = []
+        if offersBouldering || present.contains(.boulder) { boards.append(.bouldering) }
+        if offersRoped || present.contains(.route) || present.contains(.ice) { boards.append(.roped) }
+        return boards
+    }
+
+    private var mostSendsCard: some View {
+        PodiumCard(
+            title: showsHardest ? "Most sends" : "Most climbs sent",
+            systemImage: "list.number",
+            tiers: store.mostSendsLeaderboard(at: placeID),
+            emptyText: "No sends yet",
+            openUserID: $openUserID
+        ) {
+            EmptyView()
+        }
+    }
+
+    @ViewBuilder
+    private func hardestCard(_ board: HardestBoard) -> some View {
+        switch board {
+        case .bouldering:
+            PodiumCard(
+                title: "Hardest boulder",
+                systemImage: "flame",
+                tiers: store.hardestSendLeaderboard(at: placeID, category: .boulder),
+                emptyText: "No graded boulders yet",
+                openUserID: $openUserID
+            ) {
+                EmptyView()
+            }
+        case .roped:
+            // Routes and ice are both roped but graded differently: a menu switches when both exist.
+            let present = store.leaderboardCategories(at: placeID).filter { $0 != .boulder }
+            let category = ropedCategory.flatMap { present.contains($0) ? $0 : nil } ?? present.first ?? .route
+            PodiumCard(
+                title: "Hardest roped",
+                systemImage: "flame",
+                tiers: store.hardestSendLeaderboard(at: placeID, category: category),
+                emptyText: "No graded roped sends yet",
+                openUserID: $openUserID
+            ) {
+                if present.count > 1 {
+                    Menu {
+                        Picker("Category", selection: Binding(
+                            get: { category },
+                            set: { ropedCategory = $0 }
+                        )) {
+                            ForEach(present) { Text($0.displayName).tag($0) }
+                        }
+                    } label: {
+                        HStack(spacing: 2) {
+                            Text(category.displayName)
+                            Image(systemName: "chevron.down").imageScale(.small)
+                        }
+                        .font(.caption.weight(.semibold))
+                    }
+                }
+            }
         }
     }
 }
