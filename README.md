@@ -25,7 +25,7 @@ shows up in your feed. You can follow individual climbers too, Instagram-style.
 - **Climber grade:** set a bouldering and/or rope grade or grade range (e.g. V4–V6, 5.11b–5.11d) in profile setup or *Edit profile*. You choose whether it shows on your profile. The *Hardest send* line (worked out from your posts) is optional too: turn it off in *Edit profile*.
 - **Grades on thumbnails:** profile and Explore grids show each climb's grade (the community average) in the corner, when it has one.
 - **US gym and crag directories:** 1,535 US climbing gyms (including university, YMCA and rec-center walls) and 2,128 outdoor climbing areas are built in, each with its nearest town and state, so they're searchable by name or town and appear on the Explore map. Crags are tagged bouldering, rope (sport/trad) or both. Sources: `data/US_Climbing_Gyms_Simple.xlsx` → `scripts/import_gyms_xlsx.py`, and `data/US_Climbing_Areas.xlsx` → `scripts/import_crags_xlsx.py`.
-- **Add a place:** users can add a missing gym or crag. It stays marked unverified until reviewed (see [docs/PLACES_DATA_STRATEGY.md](docs/PLACES_DATA_STRATEGY.md)).
+- **Add a place:** users can add a missing gym or crag, e.g. from the composer's place picker (*Add a new gym or crag*, at the top): name it, choose gym or crag, and drop a pin by tapping the map (search a town to get there; the town / state / country fill in from the pin). It stays marked unverified until reviewed (see [docs/PLACES_DATA_STRATEGY.md](docs/PLACES_DATA_STRATEGY.md)).
 
 ## Running it
 

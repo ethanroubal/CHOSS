@@ -25,6 +25,19 @@ struct PlacePickerView: View {
                 }
             }
 
+            // Like "Add a climb": anyone can add a missing gym or crag (drop a pin, pick the type).
+            Section {
+                Button {
+                    addingPlace = true
+                } label: {
+                    Label(SearchResults.clean(query).isEmpty
+                          ? "Add a new gym or crag"
+                          : "Add “\(SearchResults.clean(query))” as a new gym or crag",
+                          systemImage: "plus.circle.fill")
+                        .font(.subheadline.weight(.semibold))
+                }
+            }
+
             Section(query.isEmpty ? "Your places" : "Results") {
                 ForEach(Array(results.enumerated()), id: \.element.id) { index, place in
                     Button {
@@ -53,13 +66,6 @@ struct PlacePickerView: View {
                 }
             }
 
-            Section {
-                Button {
-                    addingPlace = true
-                } label: {
-                    Label("Can't find it? Add a gym or crag", systemImage: "plus.circle")
-                }
-            }
         }
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
@@ -231,6 +237,9 @@ struct HomePlacesPickerView: View {
 }
 
 /// User-submitted place. Shows as unverified until reviewed (see docs/PLACES_DATA_STRATEGY.md).
+/// Add a gym or crag that isn't listed yet: name it, choose gym or crag, and drop a pin where it
+/// is (tap the map; search a town to get there quickly). The town / state / country fill in from
+/// the pin. It shows as unverified until reviewed (see docs/PLACES_DATA_STRATEGY.md).
 struct AddPlaceView: View {
     @Environment(AppStore.self) private var store
     @Environment(\.dismiss) private var dismiss
@@ -238,15 +247,24 @@ struct AddPlaceView: View {
     let onAdded: (Place.ID) -> Void
 
     @State private var name: String
-    @State private var kind: PlaceKind = .gym
+    /// Must be chosen (no default), so nothing is filed as the wrong kind by accident.
+    @State private var kind: PlaceKind?
     @State private var city = ""
     @State private var region = ""
     @State private var country = ""
-    @State private var disciplines: Set<ClimbDiscipline> = [.boulder]
+    @State private var disciplines: Set<ClimbDiscipline> = []
     @State private var about = ""
-    @State private var camera: MapCameraPosition = .userLocation(fallback: .automatic)
-    @State private var center: CLLocationCoordinate2D?
+    @State private var camera: MapCameraPosition = .region(Self.startRegion)
+    @State private var pin: CLLocationCoordinate2D?
+    @State private var locationQuery = ""
+    @State private var isLocating = false
     @State private var isSaving = false
+
+    /// The continental US (where the bundled directory is), until the climber searches or zooms.
+    private static let startRegion = MKCoordinateRegion(
+        center: CLLocationCoordinate2D(latitude: 39.5, longitude: -98.35),
+        span: MKCoordinateSpan(latitudeDelta: 30, longitudeDelta: 50)
+    )
 
     init(suggestedName: String = "", onAdded: @escaping (Place.ID) -> Void) {
         _name = State(initialValue: suggestedName)
@@ -259,36 +277,29 @@ struct AddPlaceView: View {
                 Section {
                     TextField("Name", text: $name)
                     Picker("Type", selection: $kind) {
-                        ForEach(PlaceKind.allCases) { Label($0.displayName, systemImage: $0.symbolName).tag($0) }
+                        ForEach(PlaceKind.allCases) { kind in
+                            Label(kind.displayName, systemImage: kind.symbolName).tag(Optional(kind))
+                        }
                     }
                     .pickerStyle(.segmented)
+                } header: {
+                    Text("Gym or crag?")
+                } footer: {
+                    if kind == nil {
+                        Text("Choose whether it's an indoor gym or an outdoor crag.")
+                    }
                 }
 
-                Section("Location") {
-                    Map(position: $camera)
-                        .overlay {
-                            Image(systemName: "mappin")
-                                .font(.title)
-                                .foregroundStyle(.red)
-                                .offset(y: -12)
-                                .allowsHitTesting(false)
-                        }
-                        .onMapCameraChange(frequency: .onEnd) { context in
-                            center = context.region.center
-                        }
-                        .frame(height: 220)
-                        .listRowInsets(EdgeInsets())
-                    TextField("City / nearest town", text: $city)
-                    TextField("State / region", text: $region)
-                    TextField("Country", text: $country)
-                }
+                locationSection
 
                 Section("Climbing") {
                     ForEach(ClimbDiscipline.allCases) { d in
-                        Toggle(d.displayName, isOn: Binding(
+                        Toggle(isOn: Binding(
                             get: { disciplines.contains(d) },
                             set: { if $0 { disciplines.insert(d) } else { disciplines.remove(d) } }
-                        ))
+                        )) {
+                            DisciplineLabel(discipline: d)
+                        }
                     }
                     TextField("About (optional)", text: $about, axis: .vertical)
                 }
@@ -298,7 +309,8 @@ struct AddPlaceView: View {
                     Text("New places are visible right away and marked unverified until a moderator or the owner confirms them.")
                 }
             }
-            .navigationTitle("Add a place")
+            .scrollDismissesKeyboard(.interactively)
+            .navigationTitle("Add a gym or crag")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -310,22 +322,107 @@ struct AddPlaceView: View {
                         .disabled(!canSave || isSaving)
                 }
             }
+            .onChange(of: kind) { _, newKind in
+                // Sensible starting disciplines; the climber can change them.
+                guard disciplines.isEmpty, let newKind else { return }
+                disciplines = newKind == .gym ? [.boulder, .topRope, .sport] : [.boulder]
+            }
+        }
+    }
+
+    /// Search to get near it, then tap the map to drop the pin exactly.
+    private var locationSection: some View {
+        Section {
+            HStack {
+                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                TextField("Find a town or address", text: $locationQuery)
+                    .submitLabel(.search)
+                    .onSubmit(findLocation)
+                if isLocating { ProgressView() }
+            }
+
+            MapReader { proxy in
+                Map(position: $camera) {
+                    if let pin {
+                        Marker(name.isEmpty ? "New \(kind?.displayName.lowercased() ?? "place")" : name,
+                               systemImage: kind?.symbolName ?? "mappin",
+                               coordinate: pin)
+                            .tint(.red)
+                    }
+                }
+                .onTapGesture { point in
+                    guard let coordinate = proxy.convert(point, from: .local) else { return }
+                    withAnimation(.snappy) { pin = coordinate }
+                    fillAddress(from: coordinate)
+                }
+            }
+            .frame(height: 300)
+            .listRowInsets(EdgeInsets())
+
+            if let pin {
+                Label(String(format: "Pin at %.5f, %.5f. Tap the map again to move it.", pin.latitude, pin.longitude),
+                      systemImage: "mappin.and.ellipse")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            TextField("City / nearest town", text: $city)
+            TextField("State / region", text: $region)
+            TextField("Country", text: $country)
+        } header: {
+            Text("Location")
+        } footer: {
+            if pin == nil {
+                Text("Tap the map to drop a pin exactly where the \(kind?.displayName.lowercased() ?? "gym or crag") is. Zoom in for accuracy.")
+            }
         }
     }
 
     private var canSave: Bool {
-        !name.trimmingCharacters(in: .whitespaces).isEmpty && center != nil && !disciplines.isEmpty
+        !name.trimmingCharacters(in: .whitespaces).isEmpty && kind != nil && pin != nil && !disciplines.isEmpty
+    }
+
+    /// Moves the map to a searched town / address (the pin is still dropped by hand).
+    private func findLocation() {
+        let query = locationQuery.trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty else { return }
+        isLocating = true
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = query
+        Task {
+            let response = try? await MKLocalSearch(request: request).start()
+            if let item = response?.mapItems.first {
+                withAnimation {
+                    camera = .region(MKCoordinateRegion(
+                        center: item.placemark.coordinate,
+                        span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+                    ))
+                }
+            }
+            isLocating = false
+        }
+    }
+
+    /// Fills town / state / country from the pin (keeping anything already typed).
+    private func fillAddress(from coordinate: CLLocationCoordinate2D) {
+        let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        Task {
+            guard let placemark = try? await CLGeocoder().reverseGeocodeLocation(location).first else { return }
+            if city.isEmpty { city = placemark.locality ?? placemark.subAdministrativeArea ?? "" }
+            if region.isEmpty { region = placemark.administrativeArea ?? "" }
+            if country.isEmpty { country = placemark.isoCountryCode == "US" ? "US" : (placemark.country ?? "") }
+        }
     }
 
     private func save() {
-        guard let center else { return }
+        guard let pin, let kind else { return }
         isSaving = true
         let place = Place(
             id: "p_\(UUID().uuidString)",
             name: name.trimmingCharacters(in: .whitespaces),
             kind: kind,
             city: city, region: region, country: country,
-            latitude: center.latitude, longitude: center.longitude,
+            latitude: pin.latitude, longitude: pin.longitude,
             disciplines: ClimbDiscipline.allCases.filter(disciplines.contains),
             about: about,
             source: .userSubmitted,
