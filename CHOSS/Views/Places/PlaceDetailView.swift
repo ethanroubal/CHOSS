@@ -124,9 +124,11 @@ struct PlaceDetailView: View {
                 Text("\(place.kind.displayName) · \(place.locationLine)")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                Text(place.disciplines.map(\.displayName).joined(separator: " · "))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                if !place.disciplines.isEmpty {  // user-added places don't list them
+                    Text(place.disciplines.map(\.displayName).joined(separator: " · "))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 if !place.about.isEmpty {
                     Text(place.about).font(.subheadline).padding(.top, 2)
                 }

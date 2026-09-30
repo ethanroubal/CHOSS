@@ -252,7 +252,6 @@ struct AddPlaceView: View {
     @State private var city = ""
     @State private var region = ""
     @State private var country = ""
-    @State private var disciplines: Set<ClimbDiscipline> = []
     @State private var about = ""
     @State private var camera: MapCameraPosition = .region(Self.startRegion)
     @State private var pin: CLLocationCoordinate2D?
@@ -292,15 +291,7 @@ struct AddPlaceView: View {
 
                 locationSection
 
-                Section("Climbing") {
-                    ForEach(ClimbDiscipline.allCases) { d in
-                        Toggle(isOn: Binding(
-                            get: { disciplines.contains(d) },
-                            set: { if $0 { disciplines.insert(d) } else { disciplines.remove(d) } }
-                        )) {
-                            DisciplineLabel(discipline: d)
-                        }
-                    }
+                Section {
                     TextField("About (optional)", text: $about, axis: .vertical)
                 }
 
@@ -321,11 +312,6 @@ struct AddPlaceView: View {
                         .bold()
                         .disabled(!canSave || isSaving)
                 }
-            }
-            .onChange(of: kind) { _, newKind in
-                // Sensible starting disciplines; the climber can change them.
-                guard disciplines.isEmpty, let newKind else { return }
-                disciplines = newKind == .gym ? [.boulder, .topRope, .sport] : [.boulder]
             }
         }
     }
@@ -379,7 +365,7 @@ struct AddPlaceView: View {
     }
 
     private var canSave: Bool {
-        !name.trimmingCharacters(in: .whitespaces).isEmpty && kind != nil && pin != nil && !disciplines.isEmpty
+        !name.trimmingCharacters(in: .whitespaces).isEmpty && kind != nil && pin != nil
     }
 
     /// Moves the map to a searched town / address (the pin is still dropped by hand).
@@ -423,7 +409,9 @@ struct AddPlaceView: View {
             kind: kind,
             city: city, region: region, country: country,
             latitude: pin.latitude, longitude: pin.longitude,
-            disciplines: ClimbDiscipline.allCases.filter(disciplines.contains),
+            // Not asked for: gym or crag is enough. An empty list means "any discipline"
+            // (e.g. every discipline is offered when adding a climb there).
+            disciplines: [],
             about: about,
             source: .userSubmitted,
             isVerified: false,
