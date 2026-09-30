@@ -49,10 +49,8 @@ struct PlaceDetailView: View {
                     actionRow(place)
                     mapPreview(place)
 
-                    if place.kind == .crag {
-                        // Always on show for crags: the two podiums side by side.
-                        LeaderboardView(placeID: place.id)
-                    }
+                    // Always on show: crags get both podiums side by side; gyms get most climbs sent.
+                    LeaderboardView(placeID: place.id, showsHardest: place.kind == .crag)
 
                     if place.kind == .crag {
                         Picker("Section", selection: $tab) {

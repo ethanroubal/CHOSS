@@ -1,12 +1,14 @@
 import SwiftUI
 
-/// A crag's two leaderboards as side-by-side podiums, shown under the map on the crag's page:
-/// most different climbs sent, and hardest send (boulders / routes / ice, switchable when the
-/// crag has more than one). 1st stands in the middle on the tallest step, 2nd on the left,
+/// A place's leaderboards as podiums, shown under the map on its page: most different climbs
+/// sent, and (crags only) hardest send (boulders / routes / ice, switchable when the crag has
+/// more than one), side by side. Gyms show just most climbs sent, full width. 1st stands in the middle on the tallest step, 2nd on the left,
 /// 3rd on the right. Ties share a step: stacked avatars that open a list of usernames.
 struct LeaderboardView: View {
     @Environment(AppStore.self) private var store
     let placeID: Place.ID
+    /// Crags only: gym grades are set by each gym, so a hardest-send ranking isn't meaningful.
+    var showsHardest = true
 
     @State private var category: GradeCategory?
     /// A climber tapped on a podium (pushed via `navigationDestination`).
@@ -23,7 +25,7 @@ struct LeaderboardView: View {
 
             HStack(alignment: .top, spacing: 10) {
                 PodiumCard(
-                    title: "Most sends",
+                    title: showsHardest ? "Most sends" : "Most climbs sent",
                     systemImage: "list.number",
                     tiers: store.mostSendsLeaderboard(at: placeID),
                     emptyText: "No sends yet",
@@ -32,32 +34,34 @@ struct LeaderboardView: View {
                     EmptyView()
                 }
 
-                PodiumCard(
-                    title: "Hardest",
-                    systemImage: "flame",
-                    tiers: selected.map { store.hardestSendLeaderboard(at: placeID, category: $0) } ?? [],
-                    emptyText: "No graded sends yet",
-                    openUserID: $openUserID
-                ) {
-                    if categories.count > 1, let selected {
-                        Menu {
-                            Picker("Category", selection: Binding(
-                                get: { selected },
-                                set: { category = $0 }
-                            )) {
-                                ForEach(categories) { Text($0.displayName).tag($0) }
+                if showsHardest {
+                    PodiumCard(
+                        title: "Hardest",
+                        systemImage: "flame",
+                        tiers: selected.map { store.hardestSendLeaderboard(at: placeID, category: $0) } ?? [],
+                        emptyText: "No graded sends yet",
+                        openUserID: $openUserID
+                    ) {
+                        if categories.count > 1, let selected {
+                            Menu {
+                                Picker("Category", selection: Binding(
+                                    get: { selected },
+                                    set: { category = $0 }
+                                )) {
+                                    ForEach(categories) { Text($0.displayName).tag($0) }
+                                }
+                            } label: {
+                                HStack(spacing: 2) {
+                                    Text(selected.displayName)
+                                    Image(systemName: "chevron.down").imageScale(.small)
+                                }
+                                .font(.caption.weight(.semibold))
                             }
-                        } label: {
-                            HStack(spacing: 2) {
-                                Text(selected.displayName)
-                                Image(systemName: "chevron.down").imageScale(.small)
-                            }
-                            .font(.caption.weight(.semibold))
+                        } else if let selected {
+                            Text(selected.displayName)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
-                    } else if let selected {
-                        Text(selected.displayName)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
                     }
                 }
             }

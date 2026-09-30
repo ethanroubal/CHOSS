@@ -19,8 +19,9 @@ struct LeaderboardTier: Identifiable, Hashable {
 }
 
 extension AppStore {
-    /// Top 3 places for the most different climbs sent at a place. Repeats of the same
-    /// climb count once; unlinked posts count by route name.
+    /// Top 3 places for the most different climbs sent at a place (crag or gym). Repeats of the
+    /// same climb count once; unlinked posts count by route name (board problems), and unnamed
+    /// gym sends each count as their own climb.
     func mostSendsLeaderboard(at placeID: Place.ID) -> [LeaderboardTier] {
         let byUser = Dictionary(grouping: sends(at: placeID), by: \.authorID)
         let scores = byUser.map { userID, posts -> (userID: User.ID, score: Int, detail: String) in
