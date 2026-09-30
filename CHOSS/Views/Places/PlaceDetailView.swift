@@ -10,7 +10,6 @@ struct PlaceDetailView: View {
     private enum Tab: String, CaseIterable, Identifiable {
         case sends = "Sends"
         case climbs = "Climbs"
-        case leaders = "Leaderboard"
         var id: Self { self }
     }
 
@@ -51,6 +50,11 @@ struct PlaceDetailView: View {
                     mapPreview(place)
 
                     if place.kind == .crag {
+                        // Always on show for crags: the two podiums side by side.
+                        LeaderboardView(placeID: place.id)
+                    }
+
+                    if place.kind == .crag {
                         Picker("Section", selection: $tab) {
                             ForEach(Tab.allCases) { Text($0.rawValue).tag($0) }
                         }
@@ -61,7 +65,6 @@ struct PlaceDetailView: View {
                     switch place.kind == .crag ? tab : .sends {
                     case .sends: sends(place)
                     case .climbs: climbList(place)
-                    case .leaders: LeaderboardView(placeID: place.id)
                     }
                     BrandFooter()
                 }

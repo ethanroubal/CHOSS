@@ -1,170 +1,204 @@
 import SwiftUI
 
-/// A crag's leaderboards: most different climbs sent, and hardest send (boulders or routes).
-/// Ties share a podium place and collapse into a dropdown of usernames.
+/// A crag's two leaderboards as side-by-side podiums, shown under the map on the crag's page:
+/// most different climbs sent, and hardest send (boulders / routes / ice, switchable when the
+/// crag has more than one). 1st stands in the middle on the tallest step, 2nd on the left,
+/// 3rd on the right. Ties share a step: stacked avatars that open a list of usernames.
 struct LeaderboardView: View {
     @Environment(AppStore.self) private var store
     let placeID: Place.ID
 
     @State private var category: GradeCategory?
+    /// A climber tapped on a podium (pushed via `navigationDestination`).
+    @State private var openUserID: User.ID?
 
     var body: some View {
         let categories = store.leaderboardCategories(at: placeID)
         let selected = category.flatMap { categories.contains($0) ? $0 : nil } ?? categories.first
 
-        VStack(alignment: .leading, spacing: 24) {
-            board(
-                title: "Most climbs sent",
-                subtitle: "Different climbs posted here. Repeats count once.",
-                systemImage: "list.number",
-                tiers: store.mostSendsLeaderboard(at: placeID)
-            )
-
-            VStack(alignment: .leading, spacing: 10) {
-                if categories.count > 1 {
-                    Picker("Category", selection: Binding(
-                        get: { selected ?? .boulder },
-                        set: { category = $0 }
-                    )) {
-                        ForEach(categories) { Text($0.displayName).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                    .padding(.horizontal)
-                }
-
-                if let selected {
-                    board(
-                        title: "Hardest send",
-                        subtitle: comparisonNote(for: selected),
-                        systemImage: "flame",
-                        tiers: store.hardestSendLeaderboard(at: placeID, category: selected)
-                    )
-                } else {
-                    board(title: "Hardest send", subtitle: nil, systemImage: "flame", tiers: [])
-                }
-            }
-        }
-    }
-
-    private func board(title: String, subtitle: String?, systemImage: String, tiers: [LeaderboardTier]) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                Label(title, systemImage: systemImage).font(.title3.bold())
-                if let subtitle {
-                    Text(subtitle).font(.caption).foregroundStyle(.secondary)
-                }
-            }
-            .padding(.horizontal)
-
-            if tiers.isEmpty {
-                Text("No graded sends yet. Post one to claim first place!")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal)
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(tiers) { tier in
-                        TierRow(tier: tier)
-                        if tier.id != tiers.last?.id {
-                            Divider().padding(.leading, 60)
-                        }
-                    }
-                }
-                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Leaderboard", systemImage: "trophy")
+                .font(.headline)
                 .padding(.horizontal)
-            }
-        }
-    }
 
-    private func comparisonNote(for category: GradeCategory) -> String {
-        switch category {
-        case .boulder: "Font grades are converted to V-scale to compare."
-        case .route: "French grades are converted to YDS to compare."
-        case .ice: "Ranked by WI grade (mixed M grades aren't compared)."
-        }
-    }
-}
-
-/// One podium place. A single climber shows inline; a tie becomes a dropdown of usernames.
-private struct TierRow: View {
-    @Environment(AppStore.self) private var store
-    let tier: LeaderboardTier
-
-    @State private var isExpanded = false
-
-    var body: some View {
-        if tier.isTie, !tier.entries.isEmpty {
-            DisclosureGroup(isExpanded: $isExpanded) {
-                VStack(spacing: 0) {
-                    ForEach(tier.entries) { entry in
-                        entryLink(entry, avatarSize: 28)
-                            .padding(.vertical, 6)
-                    }
+            HStack(alignment: .top, spacing: 10) {
+                PodiumCard(
+                    title: "Most sends",
+                    systemImage: "list.number",
+                    tiers: store.mostSendsLeaderboard(at: placeID),
+                    emptyText: "No sends yet",
+                    openUserID: $openUserID
+                ) {
+                    EmptyView()
                 }
-                .padding(.leading, 44)
-            } label: {
-                HStack(spacing: 12) {
-                    Medal(place: tier.place)
-                    AvatarStack(userIDs: tier.entries.map(\.userID))
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("\(tier.entries.count) climbers tied")
-                            .font(.subheadline.bold())
-                        Text(isExpanded ? "Hide names" : "Show names")
+
+                PodiumCard(
+                    title: "Hardest",
+                    systemImage: "flame",
+                    tiers: selected.map { store.hardestSendLeaderboard(at: placeID, category: $0) } ?? [],
+                    emptyText: "No graded sends yet",
+                    openUserID: $openUserID
+                ) {
+                    if categories.count > 1, let selected {
+                        Menu {
+                            Picker("Category", selection: Binding(
+                                get: { selected },
+                                set: { category = $0 }
+                            )) {
+                                ForEach(categories) { Text($0.displayName).tag($0) }
+                            }
+                        } label: {
+                            HStack(spacing: 2) {
+                                Text(selected.displayName)
+                                Image(systemName: "chevron.down").imageScale(.small)
+                            }
+                            .font(.caption.weight(.semibold))
+                        }
+                    } else if let selected {
+                        Text(selected.displayName)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-                    Spacer(minLength: 0)
-                    Text(tier.scoreLabel).font(.headline.monospacedDigit())
                 }
-                .foregroundStyle(Color.primary)
             }
-            .padding(12)
-            .accessibilityLabel("Place \(tier.place): \(tier.entries.count) climbers tied at \(tier.scoreLabel)")
-        } else if let entry = tier.entries.first {
-            HStack(spacing: 12) {
-                Medal(place: tier.place)
-                entryLink(entry, avatarSize: 36)
-                Text(tier.scoreLabel).font(.headline.monospacedDigit())
-            }
-            .padding(12)
+            .padding(.horizontal)
         }
-    }
-
-    private func entryLink(_ entry: LeaderboardEntry, avatarSize: CGFloat) -> some View {
-        NavigationLink(value: Route.user(entry.userID)) {
-            HStack(spacing: 10) {
-                AvatarView(user: store.user(entry.userID), size: avatarSize)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(store.user(entry.userID)?.username ?? "unknown")
-                        .font(.subheadline.bold())
-                    Text(entry.detail)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 0)
-            }
-            .contentShape(Rectangle())
+        .navigationDestination(item: $openUserID) { userID in
+            ProfileView(userID: userID)
         }
-        .buttonStyle(.plain)
     }
 }
 
-private struct Medal: View {
-    let place: Int
+/// One leaderboard as a three-step podium in a card.
+private struct PodiumCard<Accessory: View>: View {
+    let title: String
+    let systemImage: String
+    let tiers: [LeaderboardTier]
+    let emptyText: String
+    @Binding var openUserID: User.ID?
+    @ViewBuilder let accessory: Accessory
 
     var body: some View {
-        ZStack {
-            Circle().fill(color.gradient)
-            Text("\(place)")
-                .font(.subheadline.bold())
-                .foregroundStyle(.white)
+        VStack(spacing: 8) {
+            HStack(spacing: 4) {
+                Label(title, systemImage: systemImage)
+                    .font(.subheadline.bold())
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                accessory
+            }
+
+            if tiers.isEmpty {
+                Text(emptyText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 120)
+            } else {
+                // 2nd | 1st | 3rd, standing on steps of different heights.
+                HStack(alignment: .bottom, spacing: 4) {
+                    step(place: 2)
+                    step(place: 1)
+                    step(place: 3)
+                }
+            }
         }
-        .frame(width: 32, height: 32)
-        .accessibilityLabel(["1st", "2nd", "3rd"][min(max(place - 1, 0), 2)] + " place")
+        .padding(10)
+        .frame(maxWidth: .infinity)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
-    private var color: Color {
+    @ViewBuilder
+    private func step(place: Int) -> some View {
+        let tier = tiers.first { $0.place == place }
+        VStack(spacing: 4) {
+            if let tier {
+                PodiumOccupant(tier: tier, openUserID: $openUserID)
+            } else {
+                Spacer(minLength: 0)
+            }
+            ZStack(alignment: .top) {
+                UnevenRoundedRectangle(topLeadingRadius: 6, topTrailingRadius: 6, style: .continuous)
+                    .fill(Medal.color(for: place).gradient.opacity(tier == nil ? 0.25 : 1))
+                VStack(spacing: 1) {
+                    Text("\(place)")
+                        .font(.headline.bold())
+                    if let tier {
+                        Text(tier.scoreLabel)
+                            .font(.caption2.bold().monospacedDigit())
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                    }
+                }
+                .foregroundStyle(.white)
+                .padding(.top, 4)
+                .padding(.horizontal, 2)
+            }
+            .frame(height: stepHeight(place))
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .contain)
+    }
+
+    private func stepHeight(_ place: Int) -> CGFloat {
+        switch place {
+        case 1: 64
+        case 2: 48
+        default: 36
+        }
+    }
+}
+
+/// Who stands on a step: one climber (avatar + username), or a tie (stacked avatars + "N tied")
+/// that opens a menu of their usernames.
+private struct PodiumOccupant: View {
+    @Environment(AppStore.self) private var store
+    let tier: LeaderboardTier
+    @Binding var openUserID: User.ID?
+
+    var body: some View {
+        if tier.isTie {
+            Menu {
+                Section("\(tier.entries.count) tied at \(tier.scoreLabel)") {
+                    ForEach(tier.entries) { entry in
+                        Button("@\(store.user(entry.userID)?.username ?? "unknown")") {
+                            openUserID = entry.userID
+                        }
+                    }
+                }
+            } label: {
+                VStack(spacing: 3) {
+                    AvatarStack(userIDs: tier.entries.map(\.userID), size: 24)
+                    HStack(spacing: 1) {
+                        Text("\(tier.entries.count) tied")
+                        Image(systemName: "chevron.down").imageScale(.small)
+                    }
+                    .font(.caption2.bold())
+                    .foregroundStyle(Color.primary)
+                    .lineLimit(1)
+                }
+            }
+            .accessibilityLabel("Place \(tier.place): \(tier.entries.count) climbers tied at \(tier.scoreLabel)")
+        } else if let entry = tier.entries.first {
+            Button {
+                openUserID = entry.userID
+            } label: {
+                VStack(spacing: 3) {
+                    AvatarView(user: store.user(entry.userID), size: tier.place == 1 ? 36 : 30)
+                    Text(store.user(entry.userID)?.username ?? "unknown")
+                        .font(.caption2.bold())
+                        .foregroundStyle(Color.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Place \(tier.place): \(store.user(entry.userID)?.username ?? "unknown"), \(tier.scoreLabel)")
+        }
+    }
+}
+
+enum Medal {
+    static func color(for place: Int) -> Color {
         switch place {
         case 1: Color(red: 0.85, green: 0.65, blue: 0.13)   // gold
         case 2: Color(red: 0.62, green: 0.64, blue: 0.67)   // silver
@@ -177,17 +211,18 @@ private struct Medal: View {
 private struct AvatarStack: View {
     @Environment(AppStore.self) private var store
     let userIDs: [User.ID]
+    var size: CGFloat = 28
 
     var body: some View {
-        HStack(spacing: -10) {
+        HStack(spacing: -size / 3) {
             ForEach(userIDs.prefix(3), id: \.self) { id in
-                AvatarView(user: store.user(id), size: 28)
+                AvatarView(user: store.user(id), size: size)
                     .overlay(Circle().stroke(Color(.secondarySystemBackground), lineWidth: 2))
             }
             if userIDs.count > 3 {
                 Text("+\(userIDs.count - 3)")
                     .font(.caption2.bold())
-                    .frame(width: 28, height: 28)
+                    .frame(width: size, height: size)
                     .background(Color(.tertiarySystemFill), in: Circle())
             }
         }
