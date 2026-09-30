@@ -7,6 +7,8 @@ struct PostCardView: View {
     var reason: FeedReason? = nil
 
     @State private var showingComments = false
+    /// Bumped on each like to play the bicep burst over the video.
+    @State private var likeBurst = 0
 
     private var author: User? { store.user(post.authorID) }
     private var place: Place? { store.place(post.placeID) }
@@ -16,13 +18,22 @@ struct PostCardView: View {
             reasonLabel
 
             header
+            // Double-tap likes, or unlikes if already liked.
             SendVideoPlayer(post: post) {
-                if !store.isLiked(post.id) { store.toggleLike(post.id) }
+                store.toggleLike(post.id)
             }
+            .overlay { LikeBurst(trigger: likeBurst) }
             actions
             details
         }
         .padding(.vertical, 8)
+        .onChange(of: store.isLiked(post.id)) { _, liked in
+            if liked { likeBurst += 1 }
+        }
+        // A light tap on like; unliking is silent.
+        .sensoryFeedback(trigger: store.isLiked(post.id)) { _, liked in
+            liked ? SensoryFeedback.impact(weight: .light, intensity: 0.7) : nil
+        }
         .sheet(isPresented: $showingComments) {
             CommentsView(postID: post.id)
                 .presentationDetents([.medium, .large])

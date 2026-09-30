@@ -109,7 +109,7 @@ private struct PlayerSurface: UIViewRepresentable {
 }
 
 /// Instagram-style inline video: plays automatically (looping) while mostly on screen, pauses when
-/// scrolled away. Tap to pause/resume, double-tap to like, speaker button to mute/unmute.
+/// scrolled away. Tap to pause/resume, double-tap to like / unlike, speaker button to mute/unmute.
 struct SendVideoPlayer: View {
     let post: Post
     var onDoubleTap: () -> Void = {}

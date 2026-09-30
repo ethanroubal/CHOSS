@@ -63,6 +63,62 @@ struct FlexIcon: View {
     }
 }
 
+/// Played over a video when it's liked: a bicep pops in, gives a quick flex (a small curl
+/// back and forth), then floats up and fades. Invisible between likes; never blocks taps.
+struct LikeBurst: View {
+    /// Change it to play the animation once.
+    let trigger: Int
+
+    private struct Frame {
+        var scale = 0.4
+        var angle = 0.0
+        var lift = 0.0
+        var opacity = 0.0
+    }
+
+    var body: some View {
+        Image("FlexMarkFill")
+            .resizable()
+            .renderingMode(.template)
+            .interpolation(.high)
+            .scaledToFit()
+            .frame(width: 84, height: 84)
+            .foregroundStyle(.white)
+            .shadow(color: .black.opacity(0.3), radius: 8, y: 2)
+            .keyframeAnimator(initialValue: Frame(), trigger: trigger) { content, frame in
+                content
+                    .scaleEffect(frame.scale)
+                    .rotationEffect(.degrees(frame.angle), anchor: .bottom)
+                    .offset(y: frame.lift)
+                    .opacity(frame.opacity)
+            } keyframes: { _ in
+                KeyframeTrack(\.scale) {
+                    SpringKeyframe(1.1, duration: 0.22, spring: .bouncy)
+                    SpringKeyframe(1.0, duration: 0.18)
+                    LinearKeyframe(1.0, duration: 0.3)
+                    CubicKeyframe(0.85, duration: 0.3)
+                }
+                KeyframeTrack(\.angle) {
+                    LinearKeyframe(0, duration: 0.2)
+                    CubicKeyframe(-12, duration: 0.12)
+                    CubicKeyframe(8, duration: 0.12)
+                    CubicKeyframe(0, duration: 0.14)
+                }
+                KeyframeTrack(\.lift) {
+                    LinearKeyframe(0, duration: 0.7)
+                    CubicKeyframe(-28, duration: 0.3)
+                }
+                KeyframeTrack(\.opacity) {
+                    LinearKeyframe(1, duration: 0.08)
+                    LinearKeyframe(1, duration: 0.62)
+                    LinearKeyframe(0, duration: 0.3)
+                }
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}
+
 /// Quiet sign-off at the bottom of scrolling pages.
 struct BrandFooter: View {
     var message: String? = nil
