@@ -279,19 +279,9 @@ struct AddClimbView: View {
                 Section {
                     TextField("Climb name", text: $name)
                         .autocorrectionDisabled()
-                    TextField("Area / wall / boulder (optional)", text: $area)
-                    if !knownAreas.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack {
-                                ForEach(knownAreas, id: \.self) { known in
-                                    Button(known) { area = known }
-                                        .buttonStyle(.bordered)
-                                        .font(.caption)
-                                }
-                            }
-                        }
-                    }
                 }
+
+                areaSection
 
                 if let duplicate = likelyDuplicate {
                     Section {
@@ -371,6 +361,90 @@ struct AddClimbView: View {
         return Array(Set(store.climbs(at: cragID).map(\.area).filter { !$0.isEmpty })).sorted()
     }
 
+    /// Climbs per area at the crag (for ordering suggestions and showing counts).
+    private var areaCounts: [String: Int] {
+        guard let cragID else { return [:] }
+        return Dictionary(grouping: store.climbs(at: cragID).filter { !$0.area.isEmpty }, by: \.area)
+            .mapValues(\.count)
+    }
+
+    private var trimmedArea: String {
+        area.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// The existing area the typed text is (same name ignoring case, accents and punctuation).
+    private var exactArea: String? {
+        let typed = NameMatcher.normalize(trimmedArea)
+        guard !typed.isEmpty else { return nil }
+        return knownAreas.first { NameMatcher.normalize($0) == typed }
+    }
+
+    /// Existing areas that match what's typed, best first (typos, initials and word order are
+    /// forgiven, like every search); the busiest areas when nothing is typed.
+    private var suggestedAreas: [String] {
+        let counts = areaCounts
+        let ranked = NameMatcher.rank(knownAreas, query: trimmedArea, names: { [$0] }) { lhs, rhs in
+            (counts[lhs] ?? 0) != (counts[rhs] ?? 0) ? (counts[lhs] ?? 0) > (counts[rhs] ?? 0) : lhs < rhs
+        }
+        let ordered = trimmedArea.isEmpty
+            ? knownAreas.sorted { (counts[$0] ?? 0) != (counts[$1] ?? 0) ? (counts[$0] ?? 0) > (counts[$1] ?? 0) : $0 < $1 }
+            : ranked
+        return Array(ordered.filter { $0 != exactArea }.prefix(5))
+    }
+
+    /// Area / wall / boulder: type to search the crag's existing areas and tap one, so climbs on
+    /// the same wall are grouped together; a name that matches nothing becomes a new area.
+    private var areaSection: some View {
+        Section {
+            HStack {
+                TextField("Area / wall / boulder (optional)", text: $area)
+                    .autocorrectionDisabled()
+                if exactArea != nil {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.tint)
+                        .accessibilityLabel("Existing area")
+                }
+            }
+            ForEach(Array(suggestedAreas.enumerated()), id: \.element) { index, known in
+                Button {
+                    area = known
+                } label: {
+                    HStack {
+                        Label(known, systemImage: "mappin.and.ellipse")
+                            .foregroundStyle(Color.primary)
+                        if index == 0 && !trimmedArea.isEmpty {
+                            Text("Best match")
+                                .font(.caption2.bold())
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.accentColor.opacity(0.15), in: Capsule())
+                                .foregroundStyle(.tint)
+                        }
+                        Spacer()
+                        let count = areaCounts[known] ?? 0
+                        Text("\(count) \(count == 1 ? "climb" : "climbs")")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        } header: {
+            Text("Area")
+        } footer: {
+            if let exactArea {
+                Text("Adding to \(exactArea), with the other climbs there.")
+            } else if !trimmedArea.isEmpty {
+                Text(suggestedAreas.isEmpty
+                     ? "“\(trimmedArea)” will be a new area at this crag."
+                     : "Tap an existing area if it's one of these, or keep “\(trimmedArea)” as a new area.")
+            } else if !knownAreas.isEmpty {
+                Text("Start typing to find the wall or boulder, or pick one of the busiest areas.")
+            }
+        }
+    }
+
     /// An existing climb here with a very similar name.
     private var likelyDuplicate: Climb? {
         guard trimmedName.count >= 3, let cragID else { return nil }
@@ -386,7 +460,7 @@ struct AddClimbView: View {
             id: "c_\(UUID().uuidString)",
             placeID: cragID,
             name: trimmedName,
-            area: area.trimmingCharacters(in: .whitespacesAndNewlines),
+            area: exactArea ?? trimmedArea,  // an existing area keeps its exact spelling
             discipline: discipline,
             grade: grade,
             about: about.trimmingCharacters(in: .whitespacesAndNewlines),
