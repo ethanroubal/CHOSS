@@ -199,16 +199,12 @@ private struct PodiumOccupant: View {
     let tier: LeaderboardTier
     @Binding var openUserID: User.ID?
 
+    @State private var showingTie = false
+
     var body: some View {
         if tier.isTie {
-            Menu {
-                Section("\(tier.entries.count) tied at \(tier.scoreLabel)") {
-                    ForEach(tier.entries) { entry in
-                        Button("@\(store.user(entry.userID)?.username ?? "unknown")") {
-                            openUserID = entry.userID
-                        }
-                    }
-                }
+            Button {
+                showingTie = true
             } label: {
                 VStack(spacing: 3) {
                     AvatarStack(userIDs: tier.entries.map(\.userID), size: 24)
@@ -220,6 +216,15 @@ private struct PodiumOccupant: View {
                     .foregroundStyle(Color.primary)
                     .lineLimit(1)
                 }
+            }
+            .buttonStyle(.plain)
+            // A small bubble next to the step (not a full sheet) listing everyone tied.
+            .popover(isPresented: $showingTie) {
+                TieList(tier: tier) { userID in
+                    showingTie = false
+                    openUserID = userID
+                }
+                .presentationCompactAdaptation(.popover)
             }
             .accessibilityLabel("Place \(tier.place): \(tier.entries.count) climbers tied at \(tier.scoreLabel)")
         } else if let entry = tier.entries.first {
@@ -238,6 +243,59 @@ private struct PodiumOccupant: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Place \(tier.place): \(store.user(entry.userID)?.username ?? "unknown"), \(tier.scoreLabel)")
         }
+    }
+}
+
+/// Everyone sharing a podium step: profile picture, username, name and what earned the spot.
+/// Tapping someone opens their profile.
+private struct TieList: View {
+    @Environment(AppStore.self) private var store
+    let tier: LeaderboardTier
+    let onSelect: (User.ID) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 6) {
+                Circle().fill(Medal.color(for: tier.place)).frame(width: 10, height: 10)
+                Text("\(tier.entries.count) tied at \(tier.scoreLabel)")
+                    .font(.subheadline.bold())
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            Divider()
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(tier.entries) { entry in
+                        let user = store.user(entry.userID)
+                        Button {
+                            onSelect(entry.userID)
+                        } label: {
+                            HStack(spacing: 10) {
+                                AvatarView(user: user, size: 36)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(user?.username ?? "unknown")
+                                        .font(.subheadline.bold())
+                                    Text(entry.detail)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                                Spacer(minLength: 12)
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .frame(maxHeight: 300)
+        }
+        .frame(minWidth: 240)
     }
 }
 
