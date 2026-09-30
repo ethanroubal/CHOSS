@@ -98,6 +98,12 @@ struct EditProfileView: View {
                 } footer: {
                     Text("Your hardest send is worked out from the sends you post. Hiding it doesn't remove you from crag leaderboards.")
                 }
+
+                Section {
+                    Toggle("Show my projects on my profile", isOn: $user.showsProjects)
+                } footer: {
+                    Text("Projects are climbs you've saved with \"Add as project\". When hidden, you still see them on your own profile.")
+                }
             }
             .onChange(of: photoItem) { _, item in
                 guard let item else { return }

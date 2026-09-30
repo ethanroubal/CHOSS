@@ -411,6 +411,36 @@ final class AppStore {
         }
     }
 
+    // MARK: - Projects
+
+    func isProject(_ climbID: Climb.ID) -> Bool {
+        currentUser?.projectClimbIDs.contains(climbID) ?? false
+    }
+
+    /// Adds a climb to (or removes it from) the current user's projects.
+    func toggleProject(_ climbID: Climb.ID) {
+        guard var user = currentUser else { return }
+        if let index = user.projectClimbIDs.firstIndex(of: climbID) {
+            user.projectClimbIDs.remove(at: index)
+        } else {
+            user.projectClimbIDs.insert(climbID, at: 0)
+        }
+        users[user.id] = user
+        perform { [repository] in
+            try await repository.saveUser(user)
+        }
+    }
+
+    /// A climber's projects, most recently added first.
+    func projects(of userID: User.ID) -> [Climb] {
+        (users[userID]?.projectClimbIDs ?? []).compactMap { climbs[$0] }
+    }
+
+    /// Whether `userID` has posted a full send of the climb.
+    func hasSent(climb climbID: Climb.ID, by userID: User.ID) -> Bool {
+        posts(ofClimb: climbID).contains { $0.authorID == userID && $0.sendStyle.countsAsSend }
+    }
+
     // MARK: - Profiles
 
     func isUsernameAvailable(_ username: String, excluding userID: User.ID? = nil) -> Bool {

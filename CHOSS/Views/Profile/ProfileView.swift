@@ -177,8 +177,43 @@ struct ProfileView: View {
                     ForEach(hardest, id: \.self) { GradeBadge(grade: $0) }
                 }
             }
+            projectsLink(user)
         }
         .padding(.horizontal)
+    }
+
+    /// "Projects" under Hardest send. Others see it only if the climber shows it; you always see
+    /// your own (marked "Only seen by you" when hidden).
+    @ViewBuilder
+    private func projectsLink(_ user: User) -> some View {
+        let isMe = user.id == store.currentUserID
+        let count = user.projectClimbIDs.count
+        if isMe || (user.showsProjects && count > 0) {
+            NavigationLink {
+                ProjectsView(userID: user.id)
+            } label: {
+                HStack(spacing: 6) {
+                    Label("Projects", systemImage: "bookmark")
+                        .font(.subheadline.weight(.semibold))
+                    Text("\(count)")
+                        .font(.caption.bold().monospacedDigit())
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.accentColor.opacity(0.15), in: Capsule())
+                    if isMe && !user.showsProjects {
+                        Label("Only seen by you", systemImage: "eye.slash")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Image(systemName: "chevron.right")
+                        .font(.caption.bold())
+                        .foregroundStyle(.tertiary)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.tint)
+        }
     }
 }
 

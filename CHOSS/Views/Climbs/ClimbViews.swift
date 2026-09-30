@@ -85,6 +85,19 @@ struct ClimbDetailView: View {
                     .foregroundStyle(Brand.onAccent)
                     .padding(.horizontal)
 
+                    // Save it to your profile's Projects.
+                    Button {
+                        withAnimation(.snappy) { store.toggleProject(climb.id) }
+                    } label: {
+                        Label(store.isProject(climb.id) ? "Your project · Remove" : "Add as project",
+                              systemImage: store.isProject(climb.id) ? "bookmark.fill" : "bookmark")
+                            .font(.subheadline.bold())
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .sensoryFeedback(.selection, trigger: store.isProject(climb.id))
+                    .padding(.horizontal)
+
                     videos(climb)
                     BrandFooter()
                 }

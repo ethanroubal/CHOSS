@@ -18,6 +18,10 @@ struct User: Identifiable, Codable, Hashable {
     var showsGradeRange: Bool = true
     /// Whether "Hardest send" (worked out from your posts) appears on your profile.
     var showsHardestSend: Bool = true
+    /// Climbs you're working on ("projects"), most recently added first.
+    var projectClimbIDs: [Climb.ID] = []
+    /// Whether other people can see your projects (you always can, on your own profile).
+    var showsProjects: Bool = true
 
     /// Ranges that should be shown to other people.
     var visibleGradeRanges: [GradeRange] {
