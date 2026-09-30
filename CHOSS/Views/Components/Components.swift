@@ -135,7 +135,7 @@ struct GradeRangeChips: View {
                 Label {
                     Text(range.display)
                 } icon: {
-                    DisciplineIcon(discipline: range.system.category == .boulder ? .boulder : .sport, size: 14)
+                    DisciplineIcon(discipline: range.system.category.iconDiscipline, size: 14)
                 }
                     .font(.caption.bold().monospacedDigit())
                     .padding(.horizontal, 8)

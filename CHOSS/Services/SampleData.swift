@@ -17,6 +17,7 @@ enum SampleData {
     static let bishop = "p_crag_bishop_area_652d05"                               // Bishop Area, CA (Buttermilks)
     static let yosemite = "p_crag_yosemite_national_park_33f84b"                  // Yosemite National Park, CA
     static let huecoTanks = "p_crag_hueco_tanks_89b091"                           // Hueco Tanks, TX
+    static let willoughby = "p_crag_lake_willoughby_mount_pisgah_mount_hor_0197db" // Lake Willoughby, VT (ice)
 
     static let users: [User] = [
         User(id: "u_sam", username: "sam.sends", displayName: "Sam Rivera",
@@ -146,6 +147,11 @@ enum SampleData {
              grade: Grade(system: .yds, value: "5.11d"), sendStyle: .redpoint,
              caption: "Hanging out over the valley on the roof crack. Bucket list ✅",
              createdAt: hoursAgo(340), likedBy: ["u_kenji", "u_sam", "u_priya"]),
+        Post(id: "post_19", authorID: "u_jess", placeID: willoughby, climbID: "c_called_on_account_of_rains",
+             videoURL: video(2), routeName: "Called on Account of Rains", discipline: .ice,
+             proposedGrade: Grade(system: .waterIce, value: "WI4+"), sendStyle: .redpoint,
+             caption: "Fat blue ice on Pisgah this week. Screws went in like butter.",
+             createdAt: hoursAgo(90), likedBy: ["u_sam", "u_kenji"]),
         Post(id: "post_10", authorID: "u_priya", placeID: oaklandGym, videoURL: video(0),
              routeName: "Yellow Comp Slab", discipline: .boulder,
              grade: Grade(system: .vScale, value: "V5"), sendStyle: .flash,
@@ -165,6 +171,9 @@ enum SampleData {
               discipline: .trad, grade: Grade(system: .yds, value: "5.7")),
         Climb(id: "c_separate_reality", placeID: yosemite, name: "Separate Reality", area: "Middle Cathedral area",
               discipline: .trad, grade: Grade(system: .yds, value: "5.11d")),
+        // Lake Willoughby (ice)
+        Climb(id: "c_called_on_account_of_rains", placeID: willoughby, name: "Called on Account of Rains",
+              area: "Mount Pisgah", discipline: .ice, grade: Grade(system: .waterIce, value: "WI4")),
         // Bishop Area (Buttermilks)
         Climb(id: "c_iron_man", placeID: bishop, name: "Iron Man Traverse", area: "Buttermilks · Grandpa Peabody",
               discipline: .boulder, grade: Grade(system: .vScale, value: "V4")),

@@ -11,6 +11,7 @@ Writes into CHOSS/Assets.xcassets:
   Wordmark     "CHOSS" on transparent: forest green in light mode, cream in dark mode
   BrandGreen / BrandCream color sets
   DisciplineBoulder / Sport / Trad / TopRope  climbing-type icons (from discipline-icons-source.png)
+  DisciplineIce  the ice axe (from discipline-ice-source.png)
   ExploreMark  the Explore tab icon (from explore-icon-source.png)
   FlexMark / FlexMarkFill  the like button's flexed bicep, outline and filled (from flex-source.png,
                the Noto Color Emoji "flexed biceps", Apache-2.0 licensed)
@@ -204,7 +205,8 @@ DISCIPLINE_ICONS = [
 
 
 def discipline_icons():
-    """Cut the four icons out of brand/discipline-icons-source.png as tintable template images."""
+    """Cut the four icons out of brand/discipline-icons-source.png as tintable template images,
+    plus the ice axe from its own source."""
     src = np.asarray(Image.open(BRAND / "discipline-icons-source.png").convert("L")).astype(float)
     h, w = src.shape
     # Black artwork on white: full alpha below 100, fading out by 200 (keeps edges smooth).
@@ -226,40 +228,59 @@ def discipline_icons():
         icon = cell[top:bottom + 1]
         cols = np.where(icon.max(axis=0) > 0.02)[0]
         icon = icon[:, cols[0]:cols[-1] + 1]
-        # Square canvas with a little padding, so every icon sits the same in a frame.
-        side = int(max(icon.shape) * 1.08)
-        canvas = np.zeros((side, side))
-        oy, ox = (side - icon.shape[0]) // 2, (side - icon.shape[1]) // 2
-        canvas[oy:oy + icon.shape[0], ox:ox + icon.shape[1]] = icon
-        rgba = np.zeros((side, side, 4), dtype=np.uint8)
-        rgba[..., 3] = (canvas * 255).round().astype(np.uint8)
-        img = Image.fromarray(rgba, "RGBA")
+        write_discipline_icon(icon, asset)
 
-        base = f"{asset[0].lower()}{asset[1:]}"
-        # 20pt @1x/2x/3x: menus and labels use images at their natural size.
-        folder = ASSETS / f"{asset}.imageset"
-        folder.mkdir(parents=True, exist_ok=True)
-        for old in folder.glob("*.png"):
-            old.unlink()
-        images = []
-        for scale in (1, 2, 3):
-            name = f"{base}@{scale}x.png"
-            img.resize((20 * scale, 20 * scale), Image.LANCZOS).save(folder / name, optimize=True)
-            images.append({"filename": name, "idiom": "universal", "scale": f"{scale}x"})
-        write_contents(folder, {
-            "images": images,
-            "info": {"author": "xcode", "version": 1},
-            "properties": {"template-rendering-intent": "template"},  # tinted like SF Symbols
-        })
-        # Large version for big placements (video placeholders), drawn resizable.
-        large = ASSETS / f"{asset}Large.imageset"
-        large.mkdir(parents=True, exist_ok=True)
-        img.resize((240, 240), Image.LANCZOS).save(large / f"{base}-large.png", optimize=True)
-        write_contents(large, {
-            "images": [{"filename": f"{base}-large.png", "idiom": "universal"}],
-            "info": {"author": "xcode", "version": 1},
-            "properties": {"template-rendering-intent": "template"},
-        })
+    ice_icon()
+
+
+def ice_icon():
+    """The ice axe from brand/discipline-ice-source.png (one black icon; works whether the
+    background is transparent or white)."""
+    src = Image.open(BRAND / "discipline-ice-source.png").convert("RGBA")
+    rgba = np.asarray(src).astype(float)
+    ink = np.clip((200 - rgba[..., :3].mean(axis=2)) / 100, 0, 1)  # dark pixels
+    alpha = ink * rgba[..., 3] / 255
+    rows = np.where(alpha.max(axis=1) > 0.02)[0]
+    cols = np.where(alpha.max(axis=0) > 0.02)[0]
+    write_discipline_icon(alpha[rows[0]:rows[-1] + 1, cols[0]:cols[-1] + 1], "DisciplineIce")
+
+
+def write_discipline_icon(icon, asset):
+    """Writes an alpha mask (cropped to the artwork) as `asset` (20pt) and `asset`Large."""
+    # Square canvas with a little padding, so every icon sits the same in a frame.
+    side = int(max(icon.shape) * 1.08)
+    canvas = np.zeros((side, side))
+    oy, ox = (side - icon.shape[0]) // 2, (side - icon.shape[1]) // 2
+    canvas[oy:oy + icon.shape[0], ox:ox + icon.shape[1]] = icon
+    rgba = np.zeros((side, side, 4), dtype=np.uint8)
+    rgba[..., 3] = (canvas * 255).round().astype(np.uint8)
+    img = Image.fromarray(rgba, "RGBA")
+
+    base = f"{asset[0].lower()}{asset[1:]}"
+    # 20pt @1x/2x/3x: menus and labels use images at their natural size.
+    folder = ASSETS / f"{asset}.imageset"
+    folder.mkdir(parents=True, exist_ok=True)
+    for old in folder.glob("*.png"):
+        old.unlink()
+    images = []
+    for scale in (1, 2, 3):
+        name = f"{base}@{scale}x.png"
+        img.resize((20 * scale, 20 * scale), Image.LANCZOS).save(folder / name, optimize=True)
+        images.append({"filename": name, "idiom": "universal", "scale": f"{scale}x"})
+    write_contents(folder, {
+        "images": images,
+        "info": {"author": "xcode", "version": 1},
+        "properties": {"template-rendering-intent": "template"},  # tinted like SF Symbols
+    })
+    # Large version for big placements (video placeholders), drawn resizable.
+    large = ASSETS / f"{asset}Large.imageset"
+    large.mkdir(parents=True, exist_ok=True)
+    img.resize((240, 240), Image.LANCZOS).save(large / f"{base}-large.png", optimize=True)
+    write_contents(large, {
+        "images": [{"filename": f"{base}-large.png", "idiom": "universal"}],
+        "info": {"author": "xcode", "version": 1},
+        "properties": {"template-rendering-intent": "template"},
+    })
 
 
 # --- Explore tab icon -----------------------------------------------------------

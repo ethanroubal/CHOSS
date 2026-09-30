@@ -345,10 +345,12 @@ struct AddClimbView: View {
         name.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// The crag's disciplines (all of them if the crag doesn't say).
+    /// The crag's disciplines (all of them if the crag doesn't say). Ice is always offered:
+    /// the directory doesn't record which crags form ice in winter.
     private var disciplines: [ClimbDiscipline] {
         let listed = store.place(cragID)?.disciplines ?? []
-        return listed.isEmpty ? ClimbDiscipline.allCases : listed
+        guard !listed.isEmpty else { return ClimbDiscipline.allCases }
+        return ClimbDiscipline.allCases.filter { listed.contains($0) || $0 == .ice }
     }
 
     private var knownAreas: [String] {

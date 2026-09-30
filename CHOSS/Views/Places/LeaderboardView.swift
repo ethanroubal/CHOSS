@@ -35,9 +35,7 @@ struct LeaderboardView: View {
                 if let selected {
                     board(
                         title: "Hardest send",
-                        subtitle: selected == .boulder
-                            ? "Font grades are converted to V-scale to compare."
-                            : "French grades are converted to YDS to compare.",
+                        subtitle: comparisonNote(for: selected),
                         systemImage: "flame",
                         tiers: store.hardestSendLeaderboard(at: placeID, category: selected)
                     )
@@ -75,6 +73,14 @@ struct LeaderboardView: View {
                 .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .padding(.horizontal)
             }
+        }
+    }
+
+    private func comparisonNote(for category: GradeCategory) -> String {
+        switch category {
+        case .boulder: "Font grades are converted to V-scale to compare."
+        case .route: "French grades are converted to YDS to compare."
+        case .ice: "Ranked by WI grade (mixed M grades aren't compared)."
         }
     }
 }
