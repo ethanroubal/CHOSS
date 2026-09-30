@@ -50,6 +50,35 @@ extension AppStore {
         return podium(scores) { rank in system.grades.indices.contains(rank) ? system.grades[rank] : "?" }
     }
 
+    /// Top 3 places for the hardest send of one discipline at a place (e.g. hardest trad send).
+    /// Grades are compared on the discipline's common scale (Font → V, French / British → YDS);
+    /// if a discipline's sends span kinds (e.g. "Other"), the scale most of them use is ranked.
+    /// Empty if nobody has a graded send of that discipline there.
+    func hardestSendLeaderboard(at placeID: Place.ID, discipline: ClimbDiscipline) -> [LeaderboardTier] {
+        let graded = sends(at: placeID)
+            .filter { $0.discipline == discipline }
+            .compactMap { post in displayGrade(for: post)?.comparable.map { (post: post, grade: $0) } }
+        let bySystem = Dictionary(grouping: graded, by: { $0.grade.system })
+        guard let system = bySystem.max(by: { $0.value.count < $1.value.count })?.key else { return [] }
+        var best: [User.ID: (grade: Grade, post: Post)] = [:]
+        for entry in bySystem[system] ?? [] {
+            if let current = best[entry.post.authorID], current.grade.rank >= entry.grade.rank { continue }
+            best[entry.post.authorID] = (entry.grade, entry.post)
+        }
+        let scores = best.map { userID, value in
+            (userID: userID, score: value.grade.rank, detail: climbName(value.post))
+        }
+        return podium(scores) { rank in system.grades.indices.contains(rank) ? system.grades[rank] : "?" }
+    }
+
+    /// Disciplines with at least one graded send at a place, in the usual discipline order.
+    func leaderboardDisciplines(at placeID: Place.ID) -> [ClimbDiscipline] {
+        let present = Set(sends(at: placeID)
+            .filter { displayGrade(for: $0)?.comparable != nil }
+            .map(\.discipline))
+        return ClimbDiscipline.allCases.filter(present.contains)
+    }
+
     /// Which categories have graded sends at a place, for the Boulders / Routes switch.
     func leaderboardCategories(at placeID: Place.ID) -> [GradeCategory] {
         let present = Set(sends(at: placeID).compactMap { displayGrade(for: $0)?.canonical?.system.category })
