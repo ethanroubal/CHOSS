@@ -68,6 +68,8 @@ CHOSS/
 scripts/import_places.py      seed gyms (OpenStreetMap) and crags (OpenBeta)
 docs/PLACES_DATA_STRATEGY.md  how to populate gyms and crags
 docs/SEARCH_AND_SCALE.md      search index, lookups, and scaling past the device
+docs/BACKEND_PLAN.md          servers: what's stored where, services, next steps
+supabase/                     database schema, security rules, server functions, seed, tests
 ```
 
 Views only talk to `AppStore`, and `AppStore` only talks to `ClimbingRepository`. Moving
@@ -75,7 +77,7 @@ to a real backend means writing one new repository type.
 
 ## Next steps
 
-1. A real backend (Supabase recommended; see the strategy doc) with auth, video upload and transcoding, and a paginated feed.
+1. The backend: schema, security rules and server functions are in `supabase/` (see [docs/BACKEND_PLAN.md](docs/BACKEND_PLAN.md)); next is sign-in and a Supabase repository in the app.
 2. Seed places with `scripts/import_places.py` and add duplicate detection for user-added places.
 3. Autoplaying muted video in the feed, push notifications ("3 new sends at Movement Gowanus"), and gym owner accounts.
 4. Tests for `AppStore` feed logic.
