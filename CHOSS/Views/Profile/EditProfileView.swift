@@ -291,8 +291,6 @@ private struct GradeRangeSection: View {
                                 id: \.self) { Text($0).tag($0) }
                     }
                 }
-
-                LabeledContent("Shows as", value: current.display)
             }
         }
     }
