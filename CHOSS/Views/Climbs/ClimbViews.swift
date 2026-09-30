@@ -150,14 +150,15 @@ struct ClimbDetailView: View {
 
     private func stats(_ climb: Climb) -> some View {
         let sends = store.posts(ofClimb: climb.id)
-        let flashes = sends.filter { $0.sendStyle == .flash || $0.sendStyle == .onsight }.count
+        // Onsights and flashes are sends like any other: no separate stat.
+        let sendCount = sends.filter { $0.sendStyle.countsAsSend }.count
         let average = store.averageGrade(forClimb: climb.id)
 
         return VStack(spacing: 10) {
             HStack {
                 StatView(value: sends.count, label: "Videos")
                 StatView(value: Set(sends.map(\.authorID)).count, label: "Climbers")
-                StatView(value: flashes, label: "Flashes")
+                StatView(value: sendCount, label: "Sends")
             }
             // The climb's grade is the community's: the average of everyone's proposed grades.
             Group {

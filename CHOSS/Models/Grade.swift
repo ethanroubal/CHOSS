@@ -305,6 +305,7 @@ enum SendStyle: String, Codable, CaseIterable, Identifiable, Hashable {
         }
     }
 
+    /// Onsight, flash, send and repeat all count as a send (no separate onsight / flash tallies).
     /// A link is a section of the climb and "Other" isn't necessarily a send, so neither counts
     /// as having sent it (leaderboards, hardest send).
     var countsAsSend: Bool { self != .link && self != .other }
