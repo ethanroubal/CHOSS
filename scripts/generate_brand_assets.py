@@ -12,6 +12,8 @@ Writes into CHOSS/Assets.xcassets:
   BrandGreen / BrandCream color sets
   DisciplineBoulder / Sport / Trad / TopRope  climbing-type icons (from discipline-icons-source.png)
   ExploreMark  the Explore tab icon (from explore-icon-source.png)
+  FlexMark / FlexMarkFill  the like button's flexed bicep, outline and filled (from flex-source.png,
+               the Noto Color Emoji "flexed biceps", Apache-2.0 licensed)
 """
 import json
 from pathlib import Path
@@ -302,6 +304,50 @@ def explore_mark():
     })
 
 
+def flex_marks():
+    """The like button: a flexed bicep as tintable templates. FlexMark is an outline (not liked),
+    FlexMarkFill is solid with the muscle lines cut out (liked). Both keep the emoji's inner
+    contour lines, which read as the bicep and fist."""
+    src = Image.open(BRAND / "flex-source.png").convert("RGBA")
+    scale = 8  # work large so the derived strokes are smooth
+    big = np.asarray(src.resize((src.width * scale, src.height * scale), Image.LANCZOS)).astype(float)
+    shape = big[..., 3] > 127
+    lum = 0.299 * big[..., 0] + 0.587 * big[..., 1] + 0.114 * big[..., 2]
+
+    def mask_img(mask):
+        return Image.fromarray((mask * 255).astype(np.uint8))
+
+    # The emoji's darker contour lines, minus its outer edge.
+    inner = np.asarray(mask_img(shape).filter(ImageFilter.MinFilter(4 * scale + 1))) > 0
+    lines = (lum < 150) & shape & inner
+    lines = np.asarray(mask_img(lines).filter(ImageFilter.MaxFilter(5)).filter(ImageFilter.GaussianBlur(3))) > 100
+    stroke = (9 * scale // 2) * 2 + 1
+    eroded = np.asarray(mask_img(shape).filter(ImageFilter.MinFilter(stroke))) > 0
+    variants = {
+        "FlexMark": (shape & ~eroded) | lines,
+        "FlexMarkFill": shape & ~lines,
+    }
+    for name, mask in variants.items():
+        alpha = mask_img(mask).filter(ImageFilter.GaussianBlur(2))
+        side = max(alpha.size)
+        canvas = Image.new("L", (side, side), 0)
+        canvas.paste(alpha, ((side - alpha.width) // 2, (side - alpha.height) // 2))
+        img = Image.new("RGBA", (side, side), (0, 0, 0, 0))
+        img.putalpha(canvas)
+        folder = ASSETS / f"{name}.imageset"
+        folder.mkdir(parents=True, exist_ok=True)
+        images = []
+        for s in (1, 2, 3):  # 24pt, the size of the other action-bar icons
+            filename = f"{name.lower()}@{s}x.png"
+            img.resize((24 * s, 24 * s), Image.LANCZOS).save(folder / filename, optimize=True)
+            images.append({"filename": filename, "idiom": "universal", "scale": f"{s}x"})
+        write_contents(folder, {
+            "images": images,
+            "info": {"author": "xcode", "version": 1},
+            "properties": {"template-rendering-intent": "template"},
+        })
+
+
 if __name__ == "__main__":
     wordmark()
     square, outside = icon_square()
@@ -311,4 +357,5 @@ if __name__ == "__main__":
     colors()
     discipline_icons()
     explore_mark()
+    flex_marks()
     print("Brand assets written to", ASSETS)

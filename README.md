@@ -6,7 +6,7 @@ shows up in your feed. You can follow individual climbers too, Instagram-style.
 
 ## Features (MVP)
 
-- **Home:** a feed of sends posted to places you follow plus climbers you follow, filterable by *All / Places / Climbers*. A row of your followed places sits at the top, like Instagram's stories tray.
+- **Home:** one feed of your own sends, sends posted to places you follow, and posts (and reposts) from climbers you follow. A row of your followed places sits at the top, like Instagram's stories tray.
 - **Explore:** trending sends (filter by boulder/sport/trad/top-rope), popular gyms and crags, and a map of every place.
 - **Search:** places, outdoor climbs, climbers, and sends (by route name, grade, place or caption). Searches run in the background on a prebuilt index (typo-tolerant, results in milliseconds even with hundreds of thousands of items), and long lists load 50 rows at a time. See [docs/SEARCH_AND_SCALE.md](docs/SEARCH_AND_SCALE.md).
 - **Profile:** stats, up to 3 home gyms / crags, hardest grades, a grid of sends, and followed places. Tap Followers, Following or Places to see the list, with a forgiving search.
@@ -15,9 +15,8 @@ shows up in your feed. You can follow individual climbers too, Instagram-style.
 - **Crag leaderboards:** a *Leaderboard* tab on every crag shows the top 3 places for **most climbs sent** (different climbs, so repeats don't count twice) and **hardest send** (with a Boulders / Routes toggle; Font is converted to V-scale and French to YDS so everyone is compared on one scale). Climbers who tie share a place, shown as a dropdown of their usernames.
 - **Post a send:** pick or record a video, tag a gym or crag, pick the climb from a searchable list (the crag's climbs, or routes already posted at the gym) or add a new one; picking an existing climb fills in its discipline (and *Repeat* if you've sent it before). Choose discipline and style (onsight / flash / send / repeat / link), propose a grade (V-scale, Font, YDS or French), and add a description. Scrolling dismisses the keyboard. Untagged posts only reach your followers.
 - **Grades are community averages:** you don't set a climb's grade, you propose one. A climb's **Grade** is the average of everyone's proposed grades for it (the linked outdoor climb, or the same route name at the same gym), falling back to the guidebook grade until someone proposes one. Links (sections, not full sends) don't count toward leaderboards or hardest sends.
-- **Video playback:** videos autoplay (looping) when mostly on screen and pause when scrolled away. Tap to pause, double-tap to like, and use the speaker button to mute or unmute (the setting is remembered). Sound plays even when the phone's silent switch is on, like other video apps. Tapping a video in a grid (profile, reposts, Explore) or a search result opens a scrollable feed that starts at that video.
-- **Engagement:** likes (including double-tap on the video), comments (swipe to delete your own), and reposts. Reposts show up in your followers' feeds as "X reposted" and on a Reposts tab on your profile.
-- **Direct messages:** the paper-plane button on a post opens *Send to*, which searches the people you follow with forgiving name matching (prefixes, initials, typos like "priay" → Priya). Pick one or more people, add a note, and send. The Messages inbox is the paper plane on Home.
+- **Video playback:** videos autoplay (looping) when mostly on screen and pause when scrolled away. Tap to pause, double-tap to like (the flexed-bicep button), and use the speaker button to mute or unmute (the setting is remembered). Sound plays even when the phone's silent switch is on, like other video apps. Tapping a video in a grid (profile, reposts, Explore) or a search result opens a scrollable feed that starts at that video.
+- **Engagement:** likes (a flexed bicep; double-tap the video works too), comments (swipe to delete your own), and reposts. Reposts show up in your followers' feeds as "X reposted" and on a Reposts tab on your profile.
 - **Profile pictures:** add, change or remove a photo in profile setup or *Edit profile*. After picking a photo you frame it: drag to center yourself and pinch to zoom inside a circle (double-tap resets). It's saved as a 600×600 image and shown everywhere avatars appear, with colored initials as the fallback.
 - **Climber grade:** set a bouldering and/or rope grade or grade range (e.g. V4–V6, 5.11b–5.11d) in profile setup or *Edit profile*. You choose whether it shows on your profile.
 - **Grades on thumbnails:** profile and Explore grids show each climb's grade (the community average) in the corner, when it has one.
@@ -42,6 +41,7 @@ The source logos live in `brand/`. `scripts/generate_brand_assets.py` (needs `pi
 - **Wordmark:** "CHOSS" in forest green, with a cream version for dark mode. Used as the Home header, the bottom-of-page footer, the splash screen, and profile setup.
 - **Discipline icons:** hold (bouldering), quickdraw (sport), cam (trad) and top-rope anchor, cut from `brand/discipline-icons-source.png` into tintable images (`DisciplineBoulder`, `…Sport`, `…Trad`, `…TopRope`, plus `…Large`).
 - **ExploreMark:** the boulderer-with-crash-pad figure from `brand/explore-icon-source.png` (label removed), used as the Explore tab icon.
+- **FlexMark / FlexMarkFill:** the like button's flexed bicep (outline and filled), derived from `brand/flex-source.png` (the Noto Color Emoji "flexed biceps", Apache-2.0).
 - **HoldMark / HoldMarkLarge:** the hold shape alone, as a tintable image. Used for the Home tab button, the splash screen, and the empty feed.
 - **Colors:** BrandGreen `#1D2A1E`, BrandCream `#F3EDE1`, the accent (forest green, lighter sage in dark mode), and OnAccent for text drawn on the accent.
 

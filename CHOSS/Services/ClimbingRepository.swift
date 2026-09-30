@@ -12,8 +12,6 @@ struct AppSnapshot {
     /// userID → users that user follows.
     var followedUsers: [User.ID: Set<User.ID>]
     var reposts: [Repost] = []
-    var conversations: [Conversation] = []
-    var messages: [Message] = []
 }
 
 /// The backend boundary. `MockClimbingRepository` backs the app today; a real
@@ -34,6 +32,4 @@ protocol ClimbingRepository: Sendable {
     func saveUser(_ user: User) async throws
     func addRepost(_ repost: Repost) async throws
     func removeRepost(postID: Post.ID, by userID: User.ID) async throws
-    func saveConversation(_ conversation: Conversation) async throws
-    func sendMessage(_ message: Message) async throws
 }

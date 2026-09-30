@@ -2,19 +2,12 @@ import SwiftUI
 
 struct HomeView: View {
     @Environment(AppStore.self) private var store
-    @State private var filter: HomeFeedFilter = .all
 
     var body: some View {
-        let feed = store.homeFeed(filter: filter)
+        let feed = store.homeFeed()
 
         NavigationStack {
             ScrollView {
-                Picker("Feed", selection: $filter) {
-                    ForEach(HomeFeedFilter.allCases) { Text($0.rawValue).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal)
-
                 followedPlacesStrip
 
                 if feed.isEmpty {
@@ -45,14 +38,6 @@ struct HomeView: View {
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     WordmarkView(height: 24)
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    NavigationLink {
-                        InboxView()
-                    } label: {
-                        Image(systemName: "paperplane")
-                    }
-                    .accessibilityLabel("Messages")
                 }
             }
             .withAppRoutes()

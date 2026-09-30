@@ -77,14 +77,4 @@ actor MockClimbingRepository: ClimbingRepository {
     func removeRepost(postID: Post.ID, by userID: User.ID) async throws {
         snapshot.reposts.removeAll { $0.postID == postID && $0.userID == userID }
     }
-
-    func saveConversation(_ conversation: Conversation) async throws {
-        if !snapshot.conversations.contains(where: { $0.id == conversation.id }) {
-            snapshot.conversations.append(conversation)
-        }
-    }
-
-    func sendMessage(_ message: Message) async throws {
-        snapshot.messages.append(message)
-    }
 }

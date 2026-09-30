@@ -17,14 +17,6 @@ struct FeedItem: Identifiable {
     var id: Post.ID { post.id }
 }
 
-enum HomeFeedFilter: String, CaseIterable, Identifiable {
-    case all = "All"
-    case places = "Places"
-    case climbers = "Climbers"
-
-    var id: Self { self }
-}
-
 /// Single source of truth for the UI. Mutations are applied optimistically and then
 /// sent to the repository; on failure they're rolled back by reloading.
 @MainActor
@@ -44,8 +36,6 @@ final class AppStore {
     private(set) var followedPlaces: [User.ID: Set<Place.ID>] = [:]
     private(set) var followedUsers: [User.ID: Set<User.ID>] = [:]
     private(set) var reposts: [Repost] = []
-    private(set) var conversations: [Conversation] = []
-    private(set) var messages: [Message] = []
 
     // MARK: Derived lookups
     // Kept in sync by `rebuildLookups()` (on load) and by each mutation, so reads are
@@ -122,8 +112,6 @@ final class AppStore {
         followedPlaces = snapshot.followedPlaces
         followedUsers = snapshot.followedUsers
         reposts = snapshot.reposts
-        conversations = snapshot.conversations
-        messages = snapshot.messages.sorted { $0.createdAt < $1.createdAt }
         rebuildLookups()
         rebuildSearchIndexes()
         isLoaded = true
@@ -153,9 +141,9 @@ final class AppStore {
 
     // MARK: - Feeds
 
-    /// The home feed: sends posted to places you follow, posts from climbers you follow,
-    /// and posts those climbers reposted. Each post appears once.
-    func homeFeed(filter: HomeFeedFilter) -> [FeedItem] {
+    /// The home feed: your own posts, sends posted to places you follow, posts from climbers you
+    /// follow, and posts those climbers reposted. Each post appears once.
+    func homeFeed() -> [FeedItem] {
         let myPlaces = followedPlaces[currentUserID] ?? []
         let myPeople = followedUsers[currentUserID] ?? []
 
@@ -163,10 +151,10 @@ final class AppStore {
         for post in posts {
             let reason: FeedReason?
             if post.authorID == currentUserID {
-                reason = filter == .places ? nil : .own
-            } else if let placeID = post.placeID, myPlaces.contains(placeID), filter != .climbers {
+                reason = .own
+            } else if let placeID = post.placeID, myPlaces.contains(placeID) {
                 reason = .followedPlace(placeID)
-            } else if myPeople.contains(post.authorID), filter != .places {
+            } else if myPeople.contains(post.authorID) {
                 reason = .followedUser
             } else {
                 reason = nil
@@ -176,15 +164,13 @@ final class AppStore {
             }
         }
 
-        if filter != .places {
-            // A post already in the feed keeps its original reason; among reposts, the newest wins.
-            for repost in reposts where myPeople.contains(repost.userID) {
-                guard let post = self.post(repost.postID) else { continue }
-                if let existing = items[post.id] {
-                    guard case .repostedBy = existing.reason, repost.createdAt > existing.date else { continue }
-                }
-                items[post.id] = FeedItem(post: post, reason: .repostedBy(repost.userID), date: repost.createdAt)
+        // A post already in the feed keeps its original reason; among reposts, the newest wins.
+        for repost in reposts where myPeople.contains(repost.userID) {
+            guard let post = self.post(repost.postID) else { continue }
+            if let existing = items[post.id] {
+                guard case .repostedBy = existing.reason, repost.createdAt > existing.date else { continue }
             }
+            items[post.id] = FeedItem(post: post, reason: .repostedBy(repost.userID), date: repost.createdAt)
         }
 
         return items.values.sorted { $0.date > $1.date }
@@ -416,62 +402,6 @@ final class AppStore {
             perform { [repository] in
                 try await repository.addRepost(repost)
             }
-        }
-    }
-
-    // MARK: - Direct messages
-
-    /// The current user's threads, most recently active first.
-    var myConversations: [Conversation] {
-        conversations
-            .filter { $0.participantIDs.contains(currentUserID) }
-            .sorted { (lastMessage(in: $0.id)?.createdAt ?? .distantPast) > (lastMessage(in: $1.id)?.createdAt ?? .distantPast) }
-    }
-
-    func messages(in conversationID: Conversation.ID) -> [Message] {
-        messages.filter { $0.conversationID == conversationID }
-    }
-
-    func lastMessage(in conversationID: Conversation.ID) -> Message? {
-        messages.last { $0.conversationID == conversationID }
-    }
-
-    /// The other people in a thread (everyone but the current user).
-    func otherParticipants(in conversation: Conversation) -> [User] {
-        conversation.participantIDs.subtracting([currentUserID]).compactMap { users[$0] }
-    }
-
-    /// Finds the 1:1 thread with `userID`, creating it if needed.
-    @discardableResult
-    func directConversation(with userID: User.ID) -> Conversation {
-        let participants: Set<User.ID> = [currentUserID, userID]
-        if let existing = conversations.first(where: { $0.participantIDs == participants }) {
-            return existing
-        }
-        let conversation = Conversation(id: UUID().uuidString, participantIDs: participants)
-        conversations.append(conversation)
-        perform { [repository] in
-            try await repository.saveConversation(conversation)
-        }
-        return conversation
-    }
-
-    func sendMessage(_ text: String, sharing postID: Post.ID? = nil, in conversationID: Conversation.ID) {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty || postID != nil else { return }
-        let message = Message(id: UUID().uuidString, conversationID: conversationID, senderID: currentUserID,
-                              text: trimmed, sharedPostID: postID, createdAt: .now)
-        messages.append(message)
-        perform { [repository] in
-            try await repository.sendMessage(message)
-        }
-    }
-
-    /// Sends a post to each recipient in their own 1:1 thread, with an optional note.
-    func share(_ postID: Post.ID, with recipientIDs: Set<User.ID>, note: String) {
-        for recipient in recipientIDs {
-            let conversation = directConversation(with: recipient)
-            sendMessage(note, sharing: postID, in: conversation.id)
         }
     }
 

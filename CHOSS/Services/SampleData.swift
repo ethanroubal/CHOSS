@@ -201,15 +201,6 @@ enum SampleData {
         reposts: [
             Repost(id: "r_1", userID: "u_jess", postID: "post_5", createdAt: hoursAgo(3)),
             Repost(id: "r_2", userID: "u_alex", postID: "post_4", createdAt: hoursAgo(6)),
-        ],
-        conversations: [
-            Conversation(id: "dm_sam_alex", participantIDs: ["u_sam", "u_alex"]),
-        ],
-        messages: [
-            Message(id: "m_1", conversationID: "dm_sam_alex", senderID: "u_alex",
-                    text: "You have to try this one", sharedPostID: "post_5", createdAt: hoursAgo(12)),
-            Message(id: "m_2", conversationID: "dm_sam_alex", senderID: "u_sam",
-                    text: "Legendary. Road trip?", sharedPostID: nil, createdAt: hoursAgo(11)),
         ]
     )
 }

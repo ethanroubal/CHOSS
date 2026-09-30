@@ -38,6 +38,31 @@ struct HoldMarkView: View {
     }
 }
 
+/// The like icon: a flexed bicep, outlined or filled (liked). Tint it like an SF Symbol.
+/// Pops briefly when it fills.
+struct FlexIcon: View {
+    var filled: Bool
+    var size: CGFloat = 24
+
+    @State private var pop = false
+
+    var body: some View {
+        Image(filled ? "FlexMarkFill" : "FlexMark")
+            .resizable()
+            .renderingMode(.template)
+            .interpolation(.high)
+            .scaledToFit()
+            .frame(width: size, height: size)
+            .scaleEffect(pop ? 1.25 : 1)
+            .onChange(of: filled) { _, isFilled in
+                guard isFilled else { return }
+                withAnimation(.spring(response: 0.2, dampingFraction: 0.5)) { pop = true }
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.6).delay(0.15)) { pop = false }
+            }
+            .accessibilityHidden(true)
+    }
+}
+
 /// Quiet sign-off at the bottom of scrolling pages.
 struct BrandFooter: View {
     var message: String? = nil

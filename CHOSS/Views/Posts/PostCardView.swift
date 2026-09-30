@@ -7,7 +7,6 @@ struct PostCardView: View {
     var reason: FeedReason? = nil
 
     @State private var showingComments = false
-    @State private var showingShare = false
 
     private var author: User? { store.user(post.authorID) }
     private var place: Place? { store.place(post.placeID) }
@@ -26,10 +25,6 @@ struct PostCardView: View {
         .padding(.vertical, 8)
         .sheet(isPresented: $showingComments) {
             CommentsView(postID: post.id)
-                .presentationDetents([.medium, .large])
-        }
-        .sheet(isPresented: $showingShare) {
-            ShareToFollowersView(post: post)
                 .presentationDetents([.medium, .large])
         }
     }
@@ -89,10 +84,10 @@ struct PostCardView: View {
             Button {
                 store.toggleLike(post.id)
             } label: {
-                Image(systemName: store.isLiked(post.id) ? "heart.fill" : "heart")
-                    .foregroundStyle(store.isLiked(post.id) ? Color.red : Color.primary)
-                    .symbolEffect(.bounce, value: store.isLiked(post.id))
+                FlexIcon(filled: store.isLiked(post.id), size: 24)
+                    .foregroundStyle(store.isLiked(post.id) ? Color.accentColor : Color.primary)
             }
+            .accessibilityLabel(store.isLiked(post.id) ? "Unlike" : "Like")
             Button {
                 showingComments = true
             } label: {
@@ -108,12 +103,6 @@ struct PostCardView: View {
                 }
                 .accessibilityLabel(store.isReposted(post.id) ? "Undo repost" : "Repost")
             }
-            Button {
-                showingShare = true
-            } label: {
-                Image(systemName: "paperplane")
-            }
-            .accessibilityLabel("Send to a friend")
             Spacer()
             Label(post.sendStyle.displayName, systemImage: post.sendStyle.symbolName)
                 .font(.caption.bold())
@@ -300,7 +289,11 @@ struct PostGrid: View {
                                 // The climb's grade, when it has one.
                                 PostGradeBadge(post: post).padding(5)
                             case .likes:
-                                Label("\(post.likedBy.count)", systemImage: "heart.fill")
+                                Label {
+                                    Text("\(post.likedBy.count)")
+                                } icon: {
+                                    FlexIcon(filled: true, size: 12)
+                                }
                                     .font(.caption2.bold())
                                     .foregroundStyle(.white)
                                     .padding(.horizontal, 6)
