@@ -9,8 +9,8 @@ how it works now and what changes when data outgrows the phone.
 
 1. **Debounce.** `runSearch` (Views/Components/SearchSupport.swift) waits 120 ms. A new
    keystroke cancels the pending search, so fast typing doesn't queue work.
-2. **Off the main thread.** `AppStore.searchPlaceIDs` / `searchClimbIDs` / `searchUserIDs` /
-   `searchPostIDs` run on a snapshot of a `SearchIndex` in a background task and return ids.
+2. **Off the main thread.** `AppStore.searchPlaceIDs` / `searchClimbIDs` / `searchUserIDs`
+   run on a snapshot of a `SearchIndex` in a background task and return ids.
    The previous results stay on screen until the new ones land.
 3. **Bounded candidates.** `SearchIndex` (Services/SearchIndex.swift) never scores every item:
    - words starting with what you typed (and initials like "ml") come from a binary search in a
