@@ -349,13 +349,9 @@ struct AddClimbView: View {
         name.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// The crag's disciplines (all of them if the crag doesn't say). Ice is always offered:
-    /// the directory doesn't record which crags form ice in winter.
-    private var disciplines: [ClimbDiscipline] {
-        let listed = store.place(cragID)?.disciplines ?? []
-        guard !listed.isEmpty else { return ClimbDiscipline.allCases }
-        return ClimbDiscipline.allCases.filter { listed.contains($0) || $0 == .ice }
-    }
+    /// Every discipline: a crag's listed disciplines are incomplete (ice in winter, a boulder
+    /// under a sport wall…), so they don't limit what a new climb can be.
+    private var disciplines: [ClimbDiscipline] { ClimbDiscipline.allCases }
 
     private var knownAreas: [String] {
         guard let cragID else { return [] }

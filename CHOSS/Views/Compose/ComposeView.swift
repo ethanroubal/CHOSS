@@ -192,7 +192,8 @@ struct ComposeView: View {
             Picker("Discipline", selection: $draft.discipline) {
                 ForEach(ClimbDiscipline.allCases) { DisciplineLabel(discipline: $0).tag($0) }
             }
-            .disabled(draft.climbID != nil)
+            // Picking a climb fills in its listed discipline, but any discipline can be chosen
+            // (e.g. soloing a trad route, or top-roping a sport climb).
 
             Picker("Style", selection: $draft.sendStyle) {
                 ForEach(SendStyle.allCases) { Label($0.displayName, systemImage: $0.symbolName).tag($0) }
@@ -230,7 +231,11 @@ struct ComposeView: View {
             } else if routeIsNew {
                 Text("New climb: choose its discipline and how you sent it.")
             } else if let climb = store.climb(draft.climbID) {
-                Text("Your video will show up on \(climb.name)'s page, where people look for beta.")
+                if draft.discipline != climb.discipline {
+                    Text("Posting as \(draft.discipline.displayName) (\(climb.name) is listed as \(climb.discipline.displayName)). Your video will still show up on its page.")
+                } else {
+                    Text("Your video will show up on \(climb.name)'s page, where people look for beta.")
+                }
             } else if taggedCrag != nil {
                 Text("Pick the climb so your video shows up when people search it for beta.")
             }
