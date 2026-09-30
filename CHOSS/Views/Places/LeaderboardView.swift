@@ -46,7 +46,17 @@ struct LeaderboardView: View {
             .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
             .accessibilityHint("Shows the leaderboards")
 
-            if isExpanded {
+            if isExpanded && boards.isEmpty {
+                // Nobody has sent anything here yet.
+                Text("No legends. Will you be the first?")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 20)
+                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .padding(.horizontal)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            } else if isExpanded {
                 let rows = boards.chunked(into: 2)
                 VStack(spacing: 10) {
                     ForEach(rows, id: \.self) { row in
@@ -64,10 +74,12 @@ struct LeaderboardView: View {
         }
     }
 
-    /// Most sends first, then one hardest board per discipline with graded sends here.
+    /// Most sends first, then one hardest board per discipline with graded sends here. Boards with
+    /// nobody on them are left out (so a place with no sends has none).
     private var boards: [Board] {
         let hardest = showsHardest ? store.leaderboardDisciplines(at: placeID).map(Board.hardest) : []
-        return [.mostSends] + hardest
+        let mostSends: [Board] = store.mostSendsLeaderboard(at: placeID).isEmpty ? [] : [.mostSends]
+        return mostSends + hardest
     }
 
     @ViewBuilder
