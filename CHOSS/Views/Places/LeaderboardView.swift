@@ -193,7 +193,7 @@ private struct PodiumCard<Accessory: View>: View {
 }
 
 /// Who stands on a step: one climber (avatar + username), or a tie (stacked avatars + "N tied")
-/// that opens a menu of their usernames.
+/// that opens a bubble listing them with their profile pictures.
 private struct PodiumOccupant: View {
     @Environment(AppStore.self) private var store
     let tier: LeaderboardTier
