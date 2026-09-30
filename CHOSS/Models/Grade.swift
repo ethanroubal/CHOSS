@@ -192,6 +192,28 @@ extension Grade {
     }
 }
 
+extension Grade {
+    /// This grade on a scale shared with other systems of its kind (see `canonical`); mixed (M)
+    /// grades have no equivalent and are compared only with each other.
+    var comparable: Grade? {
+        if let canonical { return canonical }
+        return system == .mixed && rank >= 0 ? self : nil
+    }
+}
+
+extension GradeRange {
+    /// Whether `grade` falls in this range, comparing across systems of the same kind
+    /// (a V3–V6 range includes a 6B+ boulder). Grades of another kind never match.
+    func contains(_ grade: Grade) -> Bool {
+        guard let target = grade.comparable,
+              let from = Grade(system: system, value: low).comparable,
+              let to = Grade(system: system, value: high ?? low).comparable,
+              target.system == from.system else { return false }
+        let bounds = min(from.rank, to.rank)...max(from.rank, to.rank)
+        return bounds.contains(target.rank)
+    }
+}
+
 /// A climber's self-reported ability, e.g. "V4–V6" or just "5.11a".
 struct GradeRange: Codable, Hashable {
     var system: GradeSystem

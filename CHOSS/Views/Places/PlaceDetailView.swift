@@ -33,6 +33,9 @@ struct PlaceDetailView: View {
     @State private var tab: Tab = .sends
     @State private var climbSort: ClimbSort = .popularity
     @State private var hardestFirst = true
+    /// Only show climbs in this grade range (nil: all climbs).
+    @State private var gradeFilter: GradeRange?
+    @State private var editingGradeFilter = false
     @State private var discipline: ClimbDiscipline?
     @State private var climbQuery = ""
     @State private var composing = false
@@ -198,9 +201,13 @@ struct PlaceDetailView: View {
 
     /// Searchable list of the crag's climbs. While browsing, sorted by most sends, grouped by area
     /// (wall / boulder field), or by difficulty (hardest or easiest first); a search is best match first.
+    /// A grade range filter narrows the list first; sorting and search then apply to what's left.
     @ViewBuilder
     private func climbList(_ place: Place) -> some View {
-        let results = store.searchClimbs(climbQuery, at: place.id)
+        let unfiltered = store.searchClimbs(climbQuery, at: place.id)
+        let results = gradeFilter.map { range in
+            unfiltered.filter { climb in store.comparableGrade(ofClimb: climb).map(range.contains) ?? false }
+        } ?? unfiltered
 
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -220,11 +227,19 @@ struct PlaceDetailView: View {
             .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             .padding(.horizontal)
 
-            if climbQuery.isEmpty && !results.isEmpty {
-                sortControls
+            if !store.climbs(at: place.id).isEmpty {
+                listControls
             }
 
-            if results.isEmpty {
+            if results.isEmpty, let gradeFilter, !unfiltered.isEmpty {
+                ContentUnavailableView {
+                    Label("No climbs in \(gradeFilter.display)", systemImage: "line.3.horizontal.decrease.circle")
+                } description: {
+                    Text("Try a wider range.")
+                } actions: {
+                    Button("Show all grades") { self.gradeFilter = nil }
+                }
+            } else if results.isEmpty {
                 ContentUnavailableView {
                     Label(climbQuery.isEmpty ? "No climbs listed yet" : "No climb matches “\(climbQuery)”",
                           systemImage: "mountain.2")
@@ -266,31 +281,79 @@ struct PlaceDetailView: View {
         }
     }
 
-    /// Sort picker, plus hardest / easiest first when sorting by difficulty.
-    private var sortControls: some View {
-        HStack {
-            Menu {
-                Picker("Sort climbs", selection: $climbSort) {
-                    ForEach(ClimbSort.allCases) { sort in
-                        Label(sort.rawValue, systemImage: sort.symbolName).tag(sort)
+    /// Grade range filter and sort picker (plus hardest / easiest first when sorting by
+    /// difficulty). Sorting applies while browsing; a search is ordered by best match.
+    private var listControls: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                if climbQuery.isEmpty {
+                    Menu {
+                        Picker("Sort climbs", selection: $climbSort) {
+                            ForEach(ClimbSort.allCases) { sort in
+                                Label(sort.rawValue, systemImage: sort.symbolName).tag(sort)
+                            }
+                        }
+                    } label: {
+                        Label("Sort: \(climbSort.rawValue)", systemImage: "arrow.up.arrow.down")
+                            .font(.subheadline.weight(.medium))
                     }
                 }
-            } label: {
-                Label("Sort: \(climbSort.rawValue)", systemImage: "arrow.up.arrow.down")
-                    .font(.subheadline.weight(.medium))
+                Spacer()
+                gradeFilterButton
             }
-            Spacer()
-            if climbSort == .difficulty {
+            if climbQuery.isEmpty && climbSort == .difficulty {
                 Picker("Order", selection: $hardestFirst) {
                     Text("Hardest first").tag(true)
                     Text("Easiest first").tag(false)
                 }
                 .pickerStyle(.segmented)
-                .fixedSize()
             }
         }
         .padding(.horizontal)
         .animation(.easeOut(duration: 0.15), value: climbSort)
+        .sheet(isPresented: $editingGradeFilter) {
+            GradeFilterSheet(filter: $gradeFilter, suggestedSystem: suggestedFilterSystem)
+                .presentationDetents([.medium])
+        }
+    }
+
+    /// "Grades" when off; the range (tap to change, ✕ to clear) when on.
+    @ViewBuilder
+    private var gradeFilterButton: some View {
+        if let gradeFilter {
+            HStack(spacing: 6) {
+                Button {
+                    editingGradeFilter = true
+                } label: {
+                    Label(gradeFilter.display, systemImage: "line.3.horizontal.decrease.circle.fill")
+                        .font(.subheadline.weight(.semibold))
+                }
+                Button {
+                    self.gradeFilter = nil
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityLabel("Clear grade filter")
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(Color.accentColor.opacity(0.15), in: Capsule())
+        } else {
+            Button {
+                editingGradeFilter = true
+            } label: {
+                Label("Grades", systemImage: "line.3.horizontal.decrease.circle")
+                    .font(.subheadline.weight(.medium))
+            }
+        }
+    }
+
+    /// The scale most of this crag's climbs use, to start the filter on.
+    private var suggestedFilterSystem: GradeSystem {
+        let systems = store.climbs(at: placeID).compactMap { store.comparableGrade(ofClimb: $0)?.system }
+        let counts = Dictionary(grouping: systems, by: { $0 }).mapValues(\.count)
+        return counts.max { $0.value < $1.value }?.key ?? .vScale
     }
 
     private func climbGroup(_ title: String, _ climbs: [Climb]) -> some View {
@@ -322,9 +385,8 @@ struct PlaceDetailView: View {
         var graded: [GradeSystem: [(climb: Climb, rank: Int)]] = [:]
         var ungraded: [Climb] = []
         for climb in climbs {
-            let grade = store.averageGrade(forClimb: climb.id)?.grade ?? climb.grade
-            // Convert to the category's common scale; mixed (M) grades stay as they are.
-            guard let comparable = grade.map({ $0.canonical ?? $0 }), comparable.rank >= 0 else {
+            // On the category's common scale; mixed (M) grades stay as they are.
+            guard let comparable = store.comparableGrade(ofClimb: climb) else {
                 ungraded.append(climb)
                 continue
             }
@@ -354,6 +416,82 @@ struct PlaceDetailView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// Pick a grade range to narrow a crag's climbs: a scale, then From and To.
+private struct GradeFilterSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var filter: GradeRange?
+    let suggestedSystem: GradeSystem
+
+    @State private var system: GradeSystem
+    @State private var low: String
+    @State private var high: String
+
+    init(filter: Binding<GradeRange?>, suggestedSystem: GradeSystem) {
+        _filter = filter
+        self.suggestedSystem = suggestedSystem
+        let current = filter.wrappedValue
+        let system = current?.system ?? suggestedSystem
+        let grades = system.grades
+        _system = State(initialValue: system)
+        _low = State(initialValue: current?.low ?? grades[grades.count / 4])
+        _high = State(initialValue: current?.high ?? current?.low ?? grades[grades.count / 2])
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Picker("Scale", selection: $system) {
+                        ForEach(GradeSystem.allCases) { Text($0.displayName).tag($0) }
+                    }
+                    Picker("From", selection: $low) {
+                        ForEach(system.grades, id: \.self) { Text($0).tag($0) }
+                    }
+                    Picker("To", selection: $high) {
+                        ForEach(system.grades.filter { rank($0) >= rank(low) }, id: \.self) { Text($0).tag($0) }
+                    }
+                } footer: {
+                    Text("Shows climbs whose grade (the community average, or the guidebook grade) is in this range. Font is compared as V-scale and French as YDS.")
+                }
+            }
+            .navigationTitle("Grade range")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    if filter != nil {
+                        Button("Clear", role: .destructive) {
+                            filter = nil
+                            dismiss()
+                        }
+                    } else {
+                        Button("Cancel") { dismiss() }
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Apply") {
+                        filter = GradeRange(system: system, low: low, high: high == low ? nil : high)
+                        dismiss()
+                    }
+                    .bold()
+                }
+            }
+            .onChange(of: system) { _, newSystem in
+                // Start the new scale at a comparable spot.
+                let grades = newSystem.grades
+                low = grades[grades.count / 4]
+                high = grades[grades.count / 2]
+            }
+            .onChange(of: low) { _, newLow in
+                if rank(high) < rank(newLow) { high = newLow }
+            }
+        }
+    }
+
+    private func rank(_ grade: String) -> Int {
+        system.grades.firstIndex(of: grade) ?? 0
     }
 }
 

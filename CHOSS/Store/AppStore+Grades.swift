@@ -57,6 +57,13 @@ extension AppStore {
         Self.average(of: posts(ofClimb: climbID).compactMap(\.proposedGrade))
     }
 
+    /// A climb's grade (community average, else guidebook) on a scale it can be compared on:
+    /// V-scale for boulders, YDS for routes, WI for ice (Font / French are converted); mixed M
+    /// grades stay as they are. nil if it has no usable grade.
+    func comparableGrade(ofClimb climb: Climb) -> Grade? {
+        (averageGrade(forClimb: climb.id)?.grade ?? climb.grade).flatMap { $0.comparable }
+    }
+
     /// The grade to show and rank a post by: the climb's average proposed grade, falling back to
     /// the outdoor climb's guidebook grade when nobody has proposed one yet.
     func displayGrade(for post: Post) -> Grade? {
