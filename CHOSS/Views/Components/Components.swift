@@ -155,12 +155,20 @@ struct GradeRangeChips: View {
     }
 }
 
+/// Follow / Following toggle for climbers, gyms and crags. Following gives a short vibration;
+/// unfollowing is silent.
 struct FollowButton: View {
     let isFollowing: Bool
     let action: () -> Void
 
+    /// Bumped on each tap that follows, to play the haptic.
+    @State private var follows = 0
+
     var body: some View {
-        Button(action: action) {
+        Button {
+            if !isFollowing { follows += 1 }
+            action()
+        } label: {
             Text(isFollowing ? "Following" : "Follow")
                 .font(.subheadline.bold())
                 .frame(minWidth: 90)
@@ -169,6 +177,7 @@ struct FollowButton: View {
         .tint(isFollowing ? Color(.systemGray5) : .accentColor)
         .foregroundStyle(isFollowing ? Color.primary : Brand.onAccent)
         .animation(.snappy, value: isFollowing)
+        .sensoryFeedback(.impact(weight: .medium, intensity: 0.8), trigger: follows)
     }
 }
 
