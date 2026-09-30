@@ -189,6 +189,12 @@ final class AppStore {
         (postIDsByAuthor[userID] ?? []).compactMap { post($0) }
     }
 
+    /// Posts a user has liked, newest post first. (Likes aren't timestamped yet, so this is by
+    /// post date rather than when you liked it.)
+    func likedPosts(by userID: User.ID) -> [Post] {
+        posts.filter { $0.likedBy.contains(userID) }
+    }
+
     /// Posts a user has reposted, most recent repost first.
     func repostedPosts(by userID: User.ID) -> [Post] {
         reposts

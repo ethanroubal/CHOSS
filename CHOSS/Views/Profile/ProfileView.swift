@@ -11,6 +11,14 @@ struct MyProfileTab: View {
                     ToolbarItem(placement: .topBarTrailing) {
                         DemoAccountMenu()
                     }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        NavigationLink {
+                            SettingsView()
+                        } label: {
+                            Image(systemName: "gearshape")
+                        }
+                        .accessibilityLabel("Settings")
+                    }
                 }
                 .withAppRoutes()
         }
