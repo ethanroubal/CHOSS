@@ -7,6 +7,7 @@ struct PostCardView: View {
     var reason: FeedReason? = nil
 
     @State private var showingComments = false
+    @State private var showingLikes = false
     /// Bumped on each like to play the bicep burst over the video.
     @State private var likeBurst = 0
 
@@ -36,6 +37,10 @@ struct PostCardView: View {
         }
         .sheet(isPresented: $showingComments) {
             CommentsView(postID: post.id)
+                .presentationDetents([.medium, .large])
+        }
+        .sheet(isPresented: $showingLikes) {
+            LikesView(postID: post.id)
                 .presentationDetents([.medium, .large])
         }
     }
@@ -126,22 +131,25 @@ struct PostCardView: View {
 
     private var details: some View {
         VStack(alignment: .leading, spacing: 6) {
-            let counts = [
-                countText(post.likedBy.count, "like", "likes"),
-                countText(store.repostCount(post.id), "repost", "reposts"),
-            ].compactMap { $0 }
-            // Likes and reposts, then views in grey (visible, but quieter).
+            // Likes (tap to see who), reposts, then views in grey (visible, but quieter).
+            let likes = countText(post.likedBy.count, "like", "likes")
+            let others = [countText(store.repostCount(post.id), "repost", "reposts")].compactMap { $0 }
             let views = Text("\(post.viewCount.formatted(.number.notation(.compactName))) \(post.viewCount == 1 ? "view" : "views")")
                 .foregroundStyle(.secondary)
                 .fontWeight(.regular)
-            Group {
-                if counts.isEmpty {
-                    views
-                } else {
-                    Text(counts.joined(separator: " · ")) + Text("  ·  ").foregroundStyle(.secondary) + views
+            HStack(spacing: 0) {
+                if let likes {
+                    Button(likes) { showingLikes = true }
+                        .buttonStyle(.plain)
+                        .accessibilityHint("Shows who liked this")
+                    Text(" · ").foregroundStyle(.secondary)
                 }
+                (others.isEmpty
+                    ? views
+                    : Text(others.joined(separator: " · ")) + Text(" · ").foregroundStyle(.secondary) + views)
             }
             .font(.subheadline.bold())
+            .lineLimit(1)
 
             HStack(spacing: 8) {
                 if let grade = store.displayGrade(for: post) {
