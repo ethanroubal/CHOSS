@@ -7,6 +7,8 @@ enum ClimbDiscipline: String, Codable, CaseIterable, Identifiable, Hashable {
     case trad
     case topRope
     case ice
+    /// Anything that isn't one of the above (deep water solo, aid, a traverse…).
+    case other
 
     var id: Self { self }
 
@@ -17,6 +19,7 @@ enum ClimbDiscipline: String, Codable, CaseIterable, Identifiable, Hashable {
         case .trad: "Trad"
         case .topRope: "Top Rope"
         case .ice: "Ice"
+        case .other: "Other"
         }
     }
 
@@ -31,8 +34,12 @@ enum ClimbDiscipline: String, Codable, CaseIterable, Identifiable, Hashable {
         case .trad: "DisciplineTrad"
         case .topRope: "DisciplineTopRope"
         case .ice: "DisciplineIce"
+        case .other: ""  // uses `systemImageName`
         }
     }
+
+    /// SF Symbol for disciplines without a brand icon.
+    var systemImageName: String? { self == .other ? "ellipsis.circle" : nil }
 
     var isRoped: Bool { self != .boulder }
 
@@ -44,6 +51,8 @@ enum ClimbDiscipline: String, Codable, CaseIterable, Identifiable, Hashable {
         case .boulder: [.vScale, .font]
         case .sport, .trad, .topRope: [.yds, .french]
         case .ice: [.waterIce, .mixed]
+        // Could be anything, so every scale is offered.
+        case .other: [.vScale, .font, .yds, .french, .waterIce, .mixed]
         }
     }
 }
@@ -235,6 +244,8 @@ enum SendStyle: String, Codable, CaseIterable, Identifiable, Hashable {
     case repeatSend
     /// Linked a section / moves of the climb, not a full send.
     case link
+    /// None of the above (an attempt, a training session…).
+    case other
 
     var id: Self { self }
 
@@ -245,6 +256,7 @@ enum SendStyle: String, Codable, CaseIterable, Identifiable, Hashable {
         case .redpoint: "Send"
         case .repeatSend: "Repeat"
         case .link: "Link"
+        case .other: "Other"
         }
     }
 
@@ -255,10 +267,11 @@ enum SendStyle: String, Codable, CaseIterable, Identifiable, Hashable {
         case .redpoint: "checkmark.seal.fill"
         case .repeatSend: "arrow.clockwise"
         case .link: "point.3.connected.trianglepath.dotted"
+        case .other: "ellipsis.circle"
         }
     }
 
-    /// A link is a section of the climb, so it doesn't count as having sent it
-    /// (leaderboards, hardest send).
-    var countsAsSend: Bool { self != .link }
+    /// A link is a section of the climb and "Other" isn't necessarily a send, so neither counts
+    /// as having sent it (leaderboards, hardest send).
+    var countsAsSend: Bool { self != .link && self != .other }
 }

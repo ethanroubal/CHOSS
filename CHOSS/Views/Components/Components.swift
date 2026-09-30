@@ -102,7 +102,7 @@ struct DisciplineIcon: View {
     var size: CGFloat = 20
 
     var body: some View {
-        Image(size > 28 ? discipline.iconName + "Large" : discipline.iconName)
+        discipline.iconImage(large: size > 28)
             .resizable()
             .renderingMode(.template)
             .interpolation(.high)
@@ -120,8 +120,16 @@ struct DisciplineLabel: View {
         Label {
             Text(discipline.displayName)
         } icon: {
-            Image(discipline.iconName)
+            discipline.iconImage()
         }
+    }
+}
+
+extension ClimbDiscipline {
+    /// The brand icon (template image), or an SF Symbol for "Other".
+    func iconImage(large: Bool = false) -> Image {
+        if let systemImageName { return Image(systemName: systemImageName) }
+        return Image(large ? iconName + "Large" : iconName)
     }
 }
 
