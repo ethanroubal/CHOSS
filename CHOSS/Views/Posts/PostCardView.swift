@@ -313,6 +313,9 @@ struct PostGrid: View {
                         .aspectRatio(4 / 5, contentMode: .fit)
                         .overlay { VideoThumbnailView(post: post) }
                         .clipped()
+                        // Taps land only on the tile itself: a tall thumbnail's cropped-off overflow
+                        // mustn't catch taps meant for what's above (e.g. the sort picker).
+                        .contentShape(Rectangle())
                         .overlay(alignment: badge == .grade ? .topTrailing : .bottomLeading) {
                             switch badge {
                             case .grade:

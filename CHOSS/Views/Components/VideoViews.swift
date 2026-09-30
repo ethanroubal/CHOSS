@@ -39,6 +39,9 @@ struct VideoThumbnailView: View {
                 Image(uiImage: image)
                     .resizable()
                     .aspectRatio(contentMode: fits ? .fit : .fill)
+                    // When filled, the image overflows its frame (cropped by the parent); the
+                    // hidden part must not catch taps meant for neighbouring views.
+                    .allowsHitTesting(false)
             } else {
                 DisciplineIcon(discipline: post.discipline, size: 40)
                     .foregroundStyle(.white.opacity(0.8))

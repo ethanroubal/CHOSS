@@ -30,9 +30,11 @@ struct CommunityPhotoImage: View {
                     Image(uiImage: image)
                         .resizable()
                         .scaledToFill()
+                        .allowsHitTesting(false)  // cropped overflow shouldn't catch taps
                 }
             }
             .clipped()
+            .contentShape(Rectangle())
             .task(id: photo.imageURL) {
                 image = await PhotoImageCache.shared.image(for: photo.imageURL)
             }
