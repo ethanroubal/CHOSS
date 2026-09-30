@@ -19,6 +19,7 @@ struct PlaceDetailView: View {
     @State private var climbQuery = ""
     @State private var composing = false
     @State private var addingClimb = false
+    @State private var showingMap = false
 
     var body: some View {
         ScrollView {
@@ -26,16 +27,7 @@ struct PlaceDetailView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     header(place)
                     actionRow(place)
-                    Map(initialPosition: .region(MKCoordinateRegion(
-                        center: place.coordinate,
-                        span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
-                    ))) {
-                        Marker(place.name, systemImage: place.kind.symbolName, coordinate: place.coordinate)
-                    }
-                    .frame(height: 140)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .allowsHitTesting(false)
-                    .padding(.horizontal)
+                    mapPreview(place)
 
                     if place.kind == .crag {
                         Picker("Section", selection: $tab) {
@@ -57,6 +49,9 @@ struct PlaceDetailView: View {
                 .sheet(isPresented: $composing) {
                     ComposeView(initialPlaceID: place.id)
                 }
+                .fullScreenCover(isPresented: $showingMap) {
+                    PlaceMapView(place: place)
+                }
                 .sheet(isPresented: $addingClimb) {
                     AddClimbView(placeID: place.id, suggestedName: climbQuery) { _ in }
                 }
@@ -64,6 +59,34 @@ struct PlaceDetailView: View {
                 ContentUnavailableView("Place not found", systemImage: "mappin.slash")
             }
         }
+    }
+
+    /// A static preview; tapping it opens the full, interactive map.
+    private func mapPreview(_ place: Place) -> some View {
+        Button {
+            showingMap = true
+        } label: {
+            Map(initialPosition: .region(MKCoordinateRegion(
+                center: place.coordinate,
+                span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+            ))) {
+                Marker(place.name, systemImage: place.kind.symbolName, coordinate: place.coordinate)
+            }
+            .allowsHitTesting(false)  // the preview doesn't scroll; the whole card is the button
+            .frame(height: 140)
+            .overlay(alignment: .topTrailing) {
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .font(.footnote.weight(.semibold))
+                    .padding(8)
+                    .background(.regularMaterial, in: Circle())
+                    .padding(8)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Open map of \(place.name)")
+        .padding(.horizontal)
     }
 
     private func header(_ place: Place) -> some View {
