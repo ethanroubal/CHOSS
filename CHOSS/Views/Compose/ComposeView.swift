@@ -250,6 +250,8 @@ struct ComposeView: View {
             if !isNew { autoFillStyle() }
         case .known(let route):
             draft.climbID = nil
+            // Picked from every gym's routes: tag that gym.
+            if let placeID = route.placeID { draft.placeID = placeID }
             draft.routeName = route.name
             draft.discipline = route.discipline
             if let grade = route.grade, route.discipline.gradeSystems.contains(grade.system) {

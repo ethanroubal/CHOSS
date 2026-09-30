@@ -76,6 +76,8 @@ final class AppStore {
     @ObservationIgnored private var climbIndex = SearchIndex()
     @ObservationIgnored private var userIndex = SearchIndex()
     @ObservationIgnored private var postIndex = SearchIndex()
+    /// Routes posted at gyms (not linked to an outdoor climb), keyed by climb key.
+    @ObservationIgnored private var routeIndex = SearchIndex()
     @ObservationIgnored private var indexGeneration = 0
     /// Bumped whenever the indexes change, so open searches re-run.
     private(set) var searchIndexVersion = 0
@@ -572,6 +574,13 @@ final class AppStore {
         return await Task.detached(priority: .userInitiated) { index.search(query, limit: limit) }.value
     }
 
+    /// Routes people have posted at gyms, anywhere, by name (or the gym's name / town).
+    /// Returns climb keys; see `knownRoute(forKey:)`.
+    func searchRouteKeys(_ query: String, limit: Int = 50) async -> [String] {
+        let index = routeIndex
+        return await Task.detached(priority: .userInitiated) { index.search(query, limit: limit) }.value
+    }
+
     /// Sends by climb name, caption, place or climber. A query that is exactly a grade ("v5",
     /// "5.11a") also finds recent sends at that grade.
     func searchPostIDs(_ query: String, limit: Int = 100) async -> [Post.ID] {
@@ -660,6 +669,7 @@ final class AppStore {
         if let key = computeClimbKey(for: post) {
             climbKeyByPost[post.id] = key
             postIDsByClimbKey[key, default: []].insert(post.id, at: 0)
+            if let item = routeSearchItem(forKey: key) { routeIndex.upsert(item) }
         }
         postIndex.upsert(searchItem(for: post))
         searchIndexVersion += 1
@@ -693,7 +703,16 @@ final class AppStore {
                          boost: Double(post.likedBy.count))
     }
 
-    /// Builds all four indexes in the background. Gathering the items is a quick pass here;
+    /// A gym route (all posts sharing `key`) as a search item; nil for outdoor climbs and
+    /// routes without a place.
+    private func routeSearchItem(forKey key: String) -> SearchIndex.Item? {
+        guard let ids = postIDsByClimbKey[key], let latest = ids.first.flatMap({ post($0) }),
+              latest.climbID == nil, let place = places[latest.placeID ?? ""] else { return nil }
+        return SearchIndex.Item(id: key, names: [latest.routeName], secondary: [place.name, place.city],
+                                boost: Double(ids.count))
+    }
+
+    /// Builds the search indexes in the background. Gathering the items is a quick pass here;
     /// the expensive part (normalizing every name, building the trigram tables) runs off the
     /// main thread, and results are swapped in when ready.
     private func rebuildSearchIndexes() {
@@ -703,23 +722,26 @@ final class AppStore {
         let climbItems = climbs.values.map { searchItem(for: $0) }
         let userItems = users.values.map { searchItem(for: $0) }
         let postItems = posts.map { searchItem(for: $0) }
+        let routeItems = postIDsByClimbKey.keys.compactMap { routeSearchItem(forKey: $0) }
         Task.detached(priority: .userInitiated) { [weak self] in
             let places = SearchIndex(placeItems)
             let climbs = SearchIndex(climbItems)
             let users = SearchIndex(userItems)
             let posts = SearchIndex(postItems)
+            let routes = SearchIndex(routeItems)
             await self?.installIndexes(generation: generation, places: places, climbs: climbs,
-                                       users: users, posts: posts)
+                                       users: users, posts: posts, routes: routes)
         }
     }
 
     private func installIndexes(generation: Int, places: SearchIndex, climbs: SearchIndex,
-                                users: SearchIndex, posts: SearchIndex) {
+                                users: SearchIndex, posts: SearchIndex, routes: SearchIndex) {
         guard generation == indexGeneration else { return }  // a newer rebuild is on its way
         placeIndex = places
         climbIndex = climbs
         userIndex = users
         postIndex = posts
+        routeIndex = routes
         searchIndexVersion += 1
     }
 
