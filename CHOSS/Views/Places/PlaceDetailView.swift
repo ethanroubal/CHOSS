@@ -379,7 +379,7 @@ struct PlaceDetailView: View {
     }
 
     /// Climbs by grade, hardest or easiest first. Boulders, routes, ice and mixed are graded on
-    /// different scales, so each gets its own group (Font is compared as V-scale, French as YDS).
+    /// different scales, so each gets its own group (Font is compared as V-scale, French and British as YDS).
     /// A climb's grade is the community average, falling back to the guidebook grade; climbs with
     /// no grade come last.
     private func difficultyGroups(_ climbs: [Climb]) -> [ClimbGroup] {
@@ -455,7 +455,7 @@ private struct GradeFilterSheet: View {
                         ForEach(system.grades.filter { rank($0) >= rank(low) }, id: \.self) { Text($0).tag($0) }
                     }
                 } footer: {
-                    Text("Shows climbs whose grade (the community average, or the guidebook grade) is in this range. Font is compared as V-scale and French as YDS.")
+                    Text("Shows climbs whose grade (the community average, or the guidebook grade) is in this range. Font is compared as V-scale, and French and British as YDS.")
                 }
             }
             .navigationTitle("Grade range")

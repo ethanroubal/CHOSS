@@ -12,6 +12,7 @@ Writes into CHOSS/Assets.xcassets:
   BrandGreen / BrandCream color sets
   DisciplineBoulder / Sport / Trad / TopRope  climbing-type icons (from discipline-icons-source.png)
   DisciplineIce  the ice axe (from discipline-ice-source.png)
+  DisciplineSolo  the skull for soloing (from discipline-solo-source.png, Noto emoji)
   ExploreMark  the Explore tab icon (from explore-icon-source.png)
   FlexMark / FlexMarkFill  the like button's flexed bicep, outline and filled (from flex-source.png,
                the Noto Color Emoji "flexed biceps", Apache-2.0 licensed)
@@ -231,6 +232,7 @@ def discipline_icons():
         write_discipline_icon(icon, asset)
 
     ice_icon()
+    solo_icon()
 
 
 def ice_icon():
@@ -243,6 +245,25 @@ def ice_icon():
     rows = np.where(alpha.max(axis=1) > 0.02)[0]
     cols = np.where(alpha.max(axis=0) > 0.02)[0]
     write_discipline_icon(alpha[rows[0]:rows[-1] + 1, cols[0]:cols[-1] + 1], "DisciplineIce")
+
+
+def solo_icon():
+    """The skull for free soloing, from brand/discipline-solo-source.png (the Noto Color Emoji
+    "skull", Apache-2.0): the head's silhouette with the eyes, nose and teeth cut out."""
+    src = Image.open(BRAND / "discipline-solo-source.png").convert("RGBA")
+    scale = 8
+    big = np.asarray(src.resize((src.width * scale, src.height * scale), Image.LANCZOS)).astype(float)
+    alpha = big[..., 3] / 255
+    r, g, b = big[..., 0], big[..., 1], big[..., 2]
+    lum = 0.299 * r + 0.587 * g + 0.114 * b
+    # Dark sockets and the bluish tooth gaps become holes.
+    holes = ((lum < 150) | (b - r > 25)) & (alpha > 0.5)
+    holes = np.asarray(Image.fromarray((holes * 255).astype(np.uint8))
+                       .filter(ImageFilter.MaxFilter(9)).filter(ImageFilter.GaussianBlur(3))) / 255
+    mask = np.clip(alpha - holes, 0, 1)
+    mask = np.asarray(Image.fromarray((mask * 255).astype(np.uint8))
+                      .resize((src.width * 4, src.height * 4), Image.LANCZOS)).astype(float) / 255
+    write_discipline_icon(mask, "DisciplineSolo")
 
 
 def write_discipline_icon(icon, asset):

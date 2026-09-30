@@ -9,6 +9,8 @@ enum ClimbDiscipline: String, Codable, CaseIterable, Identifiable, Hashable {
     case ice
     /// Training boards (Moon, Kilter, Tension…): graded like boulders.
     case board
+    /// Free soloing: routes climbed without a rope.
+    case solo
     /// Anything that isn't one of the above (deep water solo, aid, a traverse…).
     case other
 
@@ -22,6 +24,7 @@ enum ClimbDiscipline: String, Codable, CaseIterable, Identifiable, Hashable {
         case .topRope: "Top Rope"
         case .ice: "Ice"
         case .board: "Board"
+        case .solo: "Solo"
         case .other: "Other"
         }
     }
@@ -37,6 +40,7 @@ enum ClimbDiscipline: String, Codable, CaseIterable, Identifiable, Hashable {
         case .trad: "DisciplineTrad"
         case .topRope: "DisciplineTopRope"
         case .ice: "DisciplineIce"
+        case .solo: "DisciplineSolo"
         case .board, .other: ""  // uses `systemImageName`
         }
     }
@@ -50,7 +54,7 @@ enum ClimbDiscipline: String, Codable, CaseIterable, Identifiable, Hashable {
         }
     }
 
-    var isRoped: Bool { self != .boulder && self != .board }
+    var isRoped: Bool { self != .boulder && self != .board && self != .solo }
 
     /// Board problems have names wherever they're climbed (a gym's board included), unlike other
     /// gym climbs.
@@ -62,10 +66,12 @@ enum ClimbDiscipline: String, Codable, CaseIterable, Identifiable, Hashable {
     var gradeSystems: [GradeSystem] {
         switch self {
         case .boulder, .board: [.vScale, .font]
-        case .sport, .trad, .topRope: [.yds, .french]
+        case .sport, .topRope: [.yds, .french]
+        // Trad (and soloing, usually on trad-graded routes) can also use British E grades.
+        case .trad, .solo: [.yds, .french, .british]
         case .ice: [.waterIce, .mixed]
         // Could be anything, so every scale is offered.
-        case .other: [.vScale, .font, .yds, .french, .waterIce, .mixed]
+        case .other: [.vScale, .font, .yds, .french, .british, .waterIce, .mixed]
         }
     }
 }
@@ -75,6 +81,8 @@ enum GradeSystem: String, Codable, CaseIterable, Identifiable, Hashable {
     case font
     case yds
     case french
+    /// British adjectival / E grades (Mod … HVS, E1–E11), used for trad in the UK.
+    case british
     /// Water ice: WI1–WI7.
     case waterIce
     /// Mixed (rock and ice with tools): M1–M14.
@@ -88,6 +96,7 @@ enum GradeSystem: String, Codable, CaseIterable, Identifiable, Hashable {
         case .font: "Font"
         case .yds: "YDS"
         case .french: "French"
+        case .british: "British (E)"
         case .waterIce: "WI"
         case .mixed: "Mixed (M)"
         }
@@ -108,6 +117,8 @@ enum GradeSystem: String, Codable, CaseIterable, Identifiable, Hashable {
         case .french:
             return ["4a", "4b", "4c", "5a", "5b", "5c"]
                 + (6...9).flatMap { n in ["a", "a+", "b", "b+", "c", "c+"].map { "\(n)\($0)" } }
+        case .british:
+            return ["Mod", "Diff", "VDiff", "HVD", "Sev", "HS", "VS", "HVS"] + (1...11).map { "E\($0)" }
         case .waterIce:
             return ["WI1", "WI2", "WI2+", "WI3", "WI3+", "WI4", "WI4+", "WI5", "WI5+", "WI6", "WI6+", "WI7"]
         case .mixed:
@@ -173,7 +184,7 @@ extension GradeSystem {
     var category: GradeCategory {
         switch self {
         case .vScale, .font: .boulder
-        case .yds, .french: .route
+        case .yds, .french, .british: .route
         case .waterIce, .mixed: .ice
         }
     }
@@ -197,6 +208,15 @@ extension Grade {
         "9a": "5.15a", "9a+": "5.15b", "9b": "5.15c", "9b+": "5.15d", "9c": "5.15d", "9c+": "5.15d",
     ]
 
+    /// Rough British → YDS conversion. British grades also depend on protection and seriousness,
+    /// so this is only for comparing on leaderboards and filters.
+    private static let britishToYDS: [String: String] = [
+        "Mod": "5.5", "Diff": "5.5", "VDiff": "5.6", "HVD": "5.6", "Sev": "5.7", "HS": "5.8",
+        "VS": "5.9", "HVS": "5.10a", "E1": "5.10c", "E2": "5.11a", "E3": "5.11c", "E4": "5.12a",
+        "E5": "5.12c", "E6": "5.13a", "E7": "5.13c", "E8": "5.14a", "E9": "5.14c", "E10": "5.15a",
+        "E11": "5.15c",
+    ]
+
     /// The same grade on its category's common scale (V-scale for boulders, YDS for routes, WI
     /// for ice), so grades from different systems can be compared. nil if it can't be converted
     /// (mixed M grades measure something different from water ice, so they aren't ranked with it).
@@ -206,6 +226,7 @@ extension Grade {
         case .vScale, .yds, .waterIce: converted = value
         case .font: converted = Self.fontToV[value]
         case .french: converted = Self.frenchToYDS[value]
+        case .british: converted = Self.britishToYDS[value]
         case .mixed: converted = nil
         }
         guard let converted else { return nil }

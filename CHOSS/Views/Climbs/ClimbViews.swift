@@ -308,10 +308,7 @@ struct AddClimbView: View {
                         ForEach(disciplines) { DisciplineLabel(discipline: $0).tag($0) }
                     }
                     if discipline.gradeSystems.count > 1 {
-                        Picker("Scale", selection: $gradeSystem) {
-                            ForEach(discipline.gradeSystems) { Text($0.displayName).tag($0) }
-                        }
-                        .pickerStyle(.segmented)
+                        GradeScalePicker(selection: $gradeSystem, systems: discipline.gradeSystems)
                     }
                     OptionalGradePicker(title: "Guidebook grade", system: gradeSystem, grade: $grade)
                     TextField("Description (optional)", text: $about, axis: .vertical)

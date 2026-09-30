@@ -112,6 +112,26 @@ struct DisciplineIcon: View {
     }
 }
 
+/// Choose a grading scale: segmented for up to three scales, a menu for more (e.g. "Other").
+struct GradeScalePicker: View {
+    @Binding var selection: GradeSystem
+    let systems: [GradeSystem]
+
+    var body: some View {
+        if systems.count > 3 {
+            Picker("Scale", selection: $selection) {
+                ForEach(systems) { Text($0.displayName).tag($0) }
+            }
+            .pickerStyle(.menu)
+        } else {
+            Picker("Scale", selection: $selection) {
+                ForEach(systems) { Text($0.displayName).tag($0) }
+            }
+            .pickerStyle(.segmented)
+        }
+    }
+}
+
 /// Text with the discipline's icon, for pickers and menus.
 struct DisciplineLabel: View {
     let discipline: ClimbDiscipline

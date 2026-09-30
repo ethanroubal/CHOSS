@@ -325,10 +325,7 @@ struct ComposeView: View {
     private var gradeSection: some View {
         Section {
             if draft.discipline.gradeSystems.count > 1 {
-                Picker("Scale", selection: gradeSystemBinding) {
-                    ForEach(draft.discipline.gradeSystems) { Text($0.displayName).tag($0) }
-                }
-                .pickerStyle(.segmented)
+                GradeScalePicker(selection: gradeSystemBinding, systems: draft.discipline.gradeSystems)
             }
 
             OptionalGradePicker(title: "Proposed grade", system: draft.gradeSystem, grade: $draft.proposedGrade)
