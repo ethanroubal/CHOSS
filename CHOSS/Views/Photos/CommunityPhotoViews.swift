@@ -236,7 +236,8 @@ private struct PhotoTile: View {
     }
 }
 
-/// One photo, large: who added it, likes (button or double-tap), and delete for your own.
+/// One photo, large: pinch to zoom, who added it, likes (button or double-tap), and delete for
+/// your own.
 private struct PhotoViewer: View {
     @Environment(AppStore.self) private var store
     @Environment(\.dismiss) private var dismiss
@@ -253,7 +254,10 @@ private struct PhotoViewer: View {
                     ZStack {
                         Color.black
                         if let image {
-                            Image(uiImage: image).resizable().scaledToFit()
+                            // Pinch to zoom and drag around, like Photos.
+                            ZoomableView {
+                                Image(uiImage: image).resizable().scaledToFit()
+                            }
                         } else {
                             ProgressView().tint(.white)
                         }
