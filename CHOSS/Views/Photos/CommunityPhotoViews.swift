@@ -77,9 +77,7 @@ struct CommunityPhotosBar: View {
         HStack(spacing: 8) {
             AddCommunityPhotoButton(subject: subject)
                 .buttonStyle(.bordered)
-            NavigationLink {
-                CommunityPhotosView(subject: subject, title: title)
-            } label: {
+            NavigationLink(value: Route.photos(subject, title: title)) {
                 Label(count == 0 ? "Photos" : "Photos · \(count)", systemImage: "photo.on.rectangle")
                     .font(.subheadline.weight(.semibold))
             }

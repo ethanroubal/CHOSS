@@ -279,6 +279,13 @@ enum Route: Hashable {
     case feed(PostFeed)
     /// A profile's followers / following / followed places.
     case connections(User.ID, ConnectionsTab)
+    /// A climber's saved projects.
+    case projects(User.ID)
+    /// Community photos of a place or climb (with its name for titles).
+    case photos(PhotoSubject, title: String)
+    /// Your settings, and the videos you've liked.
+    case settings
+    case likedVideos
 }
 
 extension View {
@@ -292,6 +299,10 @@ extension View {
             case .climb(let id): ClimbDetailView(climbID: id)
             case .feed(let feed): PostFeedView(feed: feed)
             case .connections(let userID, let tab): ConnectionsView(userID: userID, tab: tab)
+            case .projects(let userID): ProjectsView(userID: userID)
+            case .photos(let subject, let title): CommunityPhotosView(subject: subject, title: title)
+            case .settings: SettingsView()
+            case .likedVideos: LikedVideosView()
             }
         }
     }

@@ -8,9 +8,7 @@ struct SettingsView: View {
     var body: some View {
         List {
             Section("Your activity") {
-                NavigationLink {
-                    LikedVideosView()
-                } label: {
+                NavigationLink(value: Route.likedVideos) {
                     LabeledContent {
                         Text(store.likedPosts(by: store.currentUserID).count, format: .number)
                     } label: {

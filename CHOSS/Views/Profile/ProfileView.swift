@@ -12,9 +12,9 @@ struct MyProfileTab: View {
                         DemoAccountMenu()
                     }
                     ToolbarItem(placement: .topBarTrailing) {
-                        NavigationLink {
-                            SettingsView()
-                        } label: {
+                        // Value-based, like every in-app link, so links on the pushed screens
+                        // (e.g. a liked video) resolve through `withAppRoutes`.
+                        NavigationLink(value: Route.settings) {
                             Image(systemName: "gearshape")
                         }
                         .accessibilityLabel("Settings")
@@ -189,9 +189,7 @@ struct ProfileView: View {
         let isMe = user.id == store.currentUserID
         let count = user.projectClimbIDs.count
         if isMe || (user.showsProjects && count > 0) {
-            NavigationLink {
-                ProjectsView(userID: user.id)
-            } label: {
+            NavigationLink(value: Route.projects(user.id)) {
                 HStack(spacing: 6) {
                     Label("Projects", systemImage: "bookmark")
                         .font(.subheadline.weight(.semibold))
