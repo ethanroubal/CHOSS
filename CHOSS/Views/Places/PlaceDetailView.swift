@@ -188,6 +188,7 @@ struct PlaceDetailView: View {
     private func sends(_ place: Place) -> some View {
         let all = store.posts(at: place.id)
         let filtered = all.filter { discipline == nil || $0.discipline == discipline }
+        let counts = Dictionary(grouping: all, by: \.discipline).mapValues(\.count)
 
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -196,7 +197,15 @@ struct PlaceDetailView: View {
                 Menu {
                     Picker("Discipline", selection: $discipline) {
                         Text("All").tag(ClimbDiscipline?.none)
-                        ForEach(place.disciplines) { DisciplineLabel(discipline: $0).tag(ClimbDiscipline?.some($0)) }
+                        // Every discipline (not just the ones the place lists), with how many sends each has.
+                        ForEach(ClimbDiscipline.allCases) { d in
+                            Label {
+                                Text(counts[d].map { "\(d.displayName) (\($0))" } ?? d.displayName)
+                            } icon: {
+                                d.iconImage()
+                            }
+                            .tag(ClimbDiscipline?.some(d))
+                        }
                     }
                 } label: {
                     Label(discipline?.displayName ?? "All", systemImage: "line.3.horizontal.decrease.circle")
@@ -207,7 +216,7 @@ struct PlaceDetailView: View {
 
             if filtered.isEmpty {
                 ContentUnavailableView(
-                    "No sends yet",
+                    discipline.map { "No \($0.displayName.lowercased()) sends yet" } ?? "No sends yet",
                     systemImage: "figure.climbing",
                     description: Text("Be the first to post a send at \(place.name).")
                 )
