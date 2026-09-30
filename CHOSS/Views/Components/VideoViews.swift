@@ -387,6 +387,10 @@ struct SendVideoPlayer: View {
 /// A send video full screen: the whole frame on black, looping with sound, starting where the
 /// inline video was. Tap to pause, double-tap to like / unlike, drag the timeline at the bottom
 /// to jump around, swipe down or tap the X to close.
+///
+/// Pinch to zoom (up to 6×) around your fingers and drag to look around, like Photos. Letting go
+/// below 1× springs back; the view never pans past the video's edges. Swipe-down-to-close only
+/// works when not zoomed in, so dragging a zoomed video doesn't close it.
 struct FullScreenVideoView: View {
     @Environment(AppStore.self) private var store
     @Environment(\.dismiss) private var dismiss
@@ -403,12 +407,25 @@ struct FullScreenVideoView: View {
     @State private var dragOffset: CGFloat = 0
     @State private var likeBurst = 0
 
+    // Zoom: the committed state, plus the last gesture values so each frame applies only the
+    // change since the previous one (no jumps when a finger lifts or lands mid-gesture).
+    @State private var zoom: CGFloat = 1
+    @State private var pan: CGSize = .zero
+    @State private var lastMagnification: CGFloat = 1
+    @State private var lastDrag: CGSize = .zero
+    @State private var containerSize: CGSize = .zero
+
+    private static let maxZoom: CGFloat = 6
+    private var isZoomed: Bool { zoom > 1.01 }
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
             PlayerSurface(player: playback.player, gravity: .resizeAspect)
                 .opacity(playback.isReady ? 1 : 0)
                 .ignoresSafeArea()
+                .scaleEffect(zoom)
+                .offset(pan)
             if isPaused {
                 Image(systemName: "play.fill")
                     .font(.system(size: 56))
@@ -419,22 +436,33 @@ struct FullScreenVideoView: View {
         }
         .offset(y: dragOffset)
         .contentShape(Rectangle())
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { containerSize = $0 }
         .onTapGesture(count: 2) { onDoubleTap() }
         .onTapGesture {
             isPaused.toggle()
             if isPaused { playback.pause() } else { playback.play() }
         }
-        .gesture(
-            DragGesture(minimumDistance: 20)
-                .onChanged { value in dragOffset = max(value.translation.height, 0) }
-                .onEnded { value in
-                    if value.translation.height > 120 {
-                        dismiss()
-                    } else {
-                        withAnimation(.spring(response: 0.3)) { dragOffset = 0 }
+        .gesture(SimultaneousGesture(pinchGesture, dragGesture))
+        .overlay(alignment: .topLeading) {
+            if isZoomed {
+                Button {
+                    withAnimation(.spring(response: 0.3)) {
+                        zoom = 1
+                        pan = .zero
                     }
+                } label: {
+                    Text("1×")
+                        .font(.footnote.bold())
+                        .foregroundStyle(.white)
+                        .frame(width: 36, height: 36)
+                        .background(.black.opacity(0.55), in: Circle())
                 }
-        )
+                .padding()
+                .accessibilityLabel("Reset zoom")
+                .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.15), value: isZoomed)
         .overlay(alignment: .topTrailing) {
             Button {
                 dismiss()
@@ -489,6 +517,72 @@ struct FullScreenVideoView: View {
         .onChange(of: isMuted) { _, muted in playback.player.isMuted = muted }
         .onChange(of: store.isLiked(post.id)) { _, liked in
             if liked { likeBurst += 1 }
+        }
+    }
+
+    // MARK: Zoom
+
+    /// Pinch: zoom around the point between your fingers (it stays under them).
+    private var pinchGesture: some Gesture {
+        MagnifyGesture()
+            .onChanged { value in
+                let factor = value.magnification / lastMagnification
+                lastMagnification = value.magnification
+                let newZoom = min(max(zoom * factor, 0.8), Self.maxZoom)
+                let applied = newZoom / zoom
+                // Pinch point relative to the center; keep the video point under it fixed.
+                let anchor = CGSize(width: value.startLocation.x - containerSize.width / 2,
+                                    height: value.startLocation.y - containerSize.height / 2)
+                pan = CGSize(width: anchor.width - (anchor.width - pan.width) * applied,
+                             height: anchor.height - (anchor.height - pan.height) * applied)
+                zoom = newZoom
+            }
+            .onEnded { _ in
+                lastMagnification = 1
+                settleZoom()
+            }
+    }
+
+    /// Drag: look around when zoomed in; otherwise swipe down to close.
+    private var dragGesture: some Gesture {
+        DragGesture(minimumDistance: 10)
+            .onChanged { value in
+                let delta = CGSize(width: value.translation.width - lastDrag.width,
+                                   height: value.translation.height - lastDrag.height)
+                lastDrag = value.translation
+                if isZoomed {
+                    dragOffset = 0  // a pinch that started at 1× may have nudged it
+                    pan = CGSize(width: pan.width + delta.width, height: pan.height + delta.height)
+                } else {
+                    dragOffset = max(value.translation.height, 0)
+                }
+            }
+            .onEnded { value in
+                lastDrag = .zero
+                if isZoomed {
+                    settleZoom()
+                } else if value.translation.height > 120 {
+                    dismiss()
+                } else {
+                    withAnimation(.spring(response: 0.3)) { dragOffset = 0 }
+                }
+            }
+    }
+
+    /// Springs back to 1× if zoomed out too far, and keeps the zoomed video covering the screen
+    /// (no panning past its edges).
+    private func settleZoom() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+            dragOffset = 0
+            if zoom <= 1.01 {
+                zoom = 1
+                pan = .zero
+            } else {
+                let maxX = containerSize.width * (zoom - 1) / 2
+                let maxY = containerSize.height * (zoom - 1) / 2
+                pan = CGSize(width: min(max(pan.width, -maxX), maxX),
+                             height: min(max(pan.height, -maxY), maxY))
+            }
         }
     }
 }
