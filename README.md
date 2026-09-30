@@ -7,7 +7,7 @@ shows up in your feed. You can follow individual climbers too, Instagram-style.
 ## Features (MVP)
 
 - **Home:** one feed of your own sends, sends posted to places you follow, and posts (and reposts) from climbers you follow. A row of your followed places sits at the top, like Instagram's stories tray.
-- **Explore:** trending sends (filter by boulder/sport/trad/top-rope/ice), popular gyms and crags, and a map of every place.
+- **Explore:** trending sends (filter by discipline), popular gyms and crags (with their profile pictures), popular climbs (most videos, following the discipline filter), and a map of every place.
 - **Search:** places, outdoor climbs and climbers. Searches run in the background on a prebuilt index (typo-tolerant, results in milliseconds even with hundreds of thousands of items), and long lists load 50 rows at a time. See [docs/SEARCH_AND_SCALE.md](docs/SEARCH_AND_SCALE.md).
 - **Profile:** stats, up to 3 home gyms / crags, hardest grades, a grid of sends, and followed places. Tap Followers, Following or Places to see the list, with a forgiving search.
 - **Place page:** follow button, follower/send/climber counts, map, sends at this place, and a *Post a send* button.
