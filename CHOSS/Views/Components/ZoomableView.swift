@@ -28,7 +28,7 @@ struct ZoomableView<Content: View>: View {
             .clipped()
             .onGeometryChange(for: CGSize.self) { $0.size } action: { size = $0 }
             .simultaneousGesture(pinch)
-            .gesture(drag, including: isZoomed ? .all : .subviews)
+            .gesture(drag, including: isZoomed ? GestureMask.all : GestureMask.subviews)
             .overlay(alignment: .topLeading) {
                 if isZoomed {
                     Button {
