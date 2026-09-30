@@ -58,13 +58,6 @@ struct ClimbDetailView: View {
     @Environment(AppStore.self) private var store
     let climbID: Climb.ID
 
-    private enum Sort: String, CaseIterable, Identifiable {
-        case newest = "Most recent"
-        case mostLiked = "Most liked"
-        var id: Self { self }
-    }
-
-    @State private var sort: Sort = .newest
     @State private var composing = false
 
     var body: some View {
@@ -167,12 +160,30 @@ struct ClimbDetailView: View {
         .padding(.horizontal)
     }
 
-    @ViewBuilder
     private func videos(_ climb: Climb) -> some View {
-        let sends = store.posts(ofClimb: climb.id)  // newest first
+        BetaVideosSection(posts: store.posts(ofClimb: climb.id), climbName: climb.name)
+    }
+}
+
+/// "Beta videos": a profile-style grid of every video of one climb, sortable by most recent or
+/// most liked. Tapping one opens a scrollable feed in that order, starting at it.
+struct BetaVideosSection: View {
+    /// Newest first.
+    let posts: [Post]
+    let climbName: String
+
+    private enum Sort: String, CaseIterable, Identifiable {
+        case newest = "Most recent"
+        case mostLiked = "Most liked"
+        var id: Self { self }
+    }
+
+    @State private var sort: Sort = .newest
+
+    var body: some View {
         let sorted = sort == .newest
-            ? sends
-            : sends.sorted { lhs, rhs in
+            ? posts
+            : posts.sorted { lhs, rhs in
                 lhs.likedBy.count != rhs.likedBy.count
                     ? lhs.likedBy.count > rhs.likedBy.count
                     : lhs.createdAt > rhs.createdAt
@@ -194,14 +205,106 @@ struct ClimbDetailView: View {
                 ContentUnavailableView(
                     "No beta yet",
                     systemImage: "video.slash",
-                    description: Text("Nobody has posted a video of \(climb.name) yet. Be the first!")
+                    description: Text("Nobody has posted a video of \(climbName) yet. Be the first!")
                 )
             } else {
-                // Grid like a profile; tapping opens a scrollable feed in this order,
-                // starting at the tapped video.
-                PostGrid(posts: sorted, title: "\(climb.name) · \(sort.rawValue)", badge: .likes)
+                PostGrid(posts: sorted, title: "\(climbName) · \(sort.rawValue)", badge: .likes)
             }
         }
+    }
+}
+
+/// A gym route's page (or an untagged route of yours): like a climb's page, for routes that
+/// aren't in the outdoor climb list. "The same route" is the same name at the same place.
+struct RouteDetailView: View {
+    @Environment(AppStore.self) private var store
+    let climbKey: String
+
+    @State private var composing = false
+
+    var body: some View {
+        ScrollView {
+            if let route = store.knownRoute(forKey: climbKey) {
+                let sends = (store.postIDsByClimbKey[climbKey] ?? []).compactMap { store.post($0) }
+                VStack(alignment: .leading, spacing: 16) {
+                    header(route)
+                    stats(sends)
+
+                    Button {
+                        composing = true
+                    } label: {
+                        Label("Post your send of \(route.name)", systemImage: "video.badge.plus")
+                            .font(.subheadline.bold())
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .foregroundStyle(Brand.onAccent)
+                    .padding(.horizontal)
+
+                    BetaVideosSection(posts: sends, climbName: route.name)
+                    BrandFooter()
+                }
+                .navigationTitle(route.name)
+                .navigationBarTitleDisplayMode(.inline)
+                .sheet(isPresented: $composing) {
+                    ComposeView(initialPlaceID: route.placeID, initialRoute: route)
+                }
+            } else {
+                ContentUnavailableView("Route not found", systemImage: "mountain.2")
+            }
+        }
+    }
+
+    private func header(_ route: KnownRoute) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(route.name).font(.title.bold())
+                if let grade = route.grade {
+                    GradeBadge(grade: grade, prominent: true)
+                }
+            }
+            if let place = store.place(route.placeID) {
+                NavigationLink(value: Route.place(place.id)) {
+                    Label(place.name, systemImage: place.kind.symbolName)
+                        .font(.subheadline)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.tint)
+            }
+            Label {
+                Text(route.discipline.displayName)
+            } icon: {
+                DisciplineIcon(discipline: route.discipline, size: 16)
+            }
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal)
+        .padding(.top, 8)
+    }
+
+    private func stats(_ sends: [Post]) -> some View {
+        let flashes = sends.filter { $0.sendStyle == .flash || $0.sendStyle == .onsight }.count
+        let average = sends.first.flatMap { store.averageGrade(for: $0) }
+        return VStack(spacing: 10) {
+            HStack {
+                StatView(value: sends.count, label: "Videos")
+                StatView(value: Set(sends.map(\.authorID)).count, label: "Climbers")
+                StatView(value: flashes, label: "Flashes")
+            }
+            Group {
+                if let average {
+                    Text(average.count == 1
+                         ? "Grade from 1 climber's proposal"
+                         : "Grade is the average of \(average.count) climbers' proposals")
+                } else {
+                    Text("No proposed grades yet. Post a send to propose one.")
+                }
+            }
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal)
     }
 }
 

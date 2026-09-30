@@ -228,6 +228,8 @@ enum Route: Hashable {
     case user(User.ID)
     case post(Post.ID)
     case climb(Climb.ID)
+    /// A gym route (or untagged route), by its climb key.
+    case route(String)
     /// A scrollable list of posts starting at one of them.
     case feed(PostFeed)
     /// A profile's followers / following / followed places.
@@ -243,6 +245,7 @@ extension View {
             case .user(let id): ProfileView(userID: id)
             case .post(let id): PostDetailView(postID: id)
             case .climb(let id): ClimbDetailView(climbID: id)
+            case .route(let key): RouteDetailView(climbKey: key)
             case .feed(let feed): PostFeedView(feed: feed)
             case .connections(let userID, let tab): ConnectionsView(userID: userID, tab: tab)
             }
