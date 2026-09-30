@@ -75,7 +75,6 @@ final class AppStore {
     @ObservationIgnored private var placeIndex = SearchIndex()
     @ObservationIgnored private var climbIndex = SearchIndex()
     @ObservationIgnored private var userIndex = SearchIndex()
-    @ObservationIgnored private var postIndex = SearchIndex()
     @ObservationIgnored private var indexGeneration = 0
     /// Bumped whenever the indexes change, so open searches re-run.
     private(set) var searchIndexVersion = 0
@@ -624,25 +623,6 @@ final class AppStore {
         return await Task.detached(priority: .userInitiated) { index.search(query, limit: limit) }.value
     }
 
-    /// Sends by climb name, caption, place or climber. A query that is exactly a grade ("v5",
-    /// "5.11a") also finds recent sends at that grade.
-    func searchPostIDs(_ query: String, limit: Int = 100) async -> [Post.ID] {
-        let index = postIndex
-        let byText = await Task.detached(priority: .userInitiated) { index.search(query, limit: limit) }.value
-        let wanted = query.trimmingCharacters(in: .whitespaces).lowercased()
-        guard GradeSystem.allCases.contains(where: { $0.grades.contains { $0.lowercased() == wanted } }) else {
-            return byText
-        }
-        // Grades are community averages that change as people post, so they aren't indexed;
-        // check the most recent sends only, which keeps this bounded.
-        let byGrade = posts.prefix(2_000)
-            .filter { displayGrade(for: $0)?.value.lowercased() == wanted }
-            .prefix(limit)
-            .map(\.id)
-        var seen = Set(byGrade)
-        return Array((byGrade + byText.filter { seen.insert($0).inserted }).prefix(limit))
-    }
-
     // MARK: - Lookup maintenance
 
     private func postPosition(_ id: Post.ID) -> Int? {
@@ -713,8 +693,6 @@ final class AppStore {
             climbKeyByPost[post.id] = key
             postIDsByClimbKey[key, default: []].insert(post.id, at: 0)
         }
-        postIndex.upsert(searchItem(for: post))
-        searchIndexVersion += 1
         popularityVersion += 1
         engagementVersion += 1
     }
@@ -738,13 +716,6 @@ final class AppStore {
                          boost: Double(followerIDsByUser[user.id]?.count ?? 0))
     }
 
-    private func searchItem(for post: Post) -> SearchIndex.Item {
-        SearchIndex.Item(id: post.id, names: [climbs[post.climbID ?? ""]?.name ?? post.routeName],
-                         secondary: [post.caption, places[post.placeID ?? ""]?.name ?? "",
-                                     users[post.authorID]?.username ?? ""],
-                         boost: Double(post.likedBy.count))
-    }
-
     /// Builds the search indexes in the background. Gathering the items is a quick pass here;
     /// the expensive part (normalizing every name, building the trigram tables) runs off the
     /// main thread, and results are swapped in when ready.
@@ -754,24 +725,21 @@ final class AppStore {
         let placeItems = places.values.map { searchItem(for: $0) }
         let climbItems = climbs.values.map { searchItem(for: $0) }
         let userItems = users.values.map { searchItem(for: $0) }
-        let postItems = posts.map { searchItem(for: $0) }
         Task.detached(priority: .userInitiated) { [weak self] in
             let places = SearchIndex(placeItems)
             let climbs = SearchIndex(climbItems)
             let users = SearchIndex(userItems)
-            let posts = SearchIndex(postItems)
             await self?.installIndexes(generation: generation, places: places, climbs: climbs,
-                                       users: users, posts: posts)
+                                       users: users)
         }
     }
 
     private func installIndexes(generation: Int, places: SearchIndex, climbs: SearchIndex,
-                                users: SearchIndex, posts: SearchIndex) {
+                                users: SearchIndex) {
         guard generation == indexGeneration else { return }  // a newer rebuild is on its way
         placeIndex = places
         climbIndex = climbs
         userIndex = users
-        postIndex = posts
         searchIndexVersion += 1
     }
 
