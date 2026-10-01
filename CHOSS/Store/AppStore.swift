@@ -536,6 +536,34 @@ final class AppStore {
         return !users.values.contains { $0.username.lowercased() == wanted && $0.id != userID }
     }
 
+    /// Checks a username with the server (ignoring case). true: free; false: taken; nil: couldn't
+    /// check (offline). Names already loaded on the phone are checked first, instantly.
+    func checkUsernameAvailable(_ username: String, excluding userID: User.ID) async -> Bool? {
+        if !isUsernameAvailable(username, excluding: userID) { return false }
+        do {
+            return try await !repository.isUsernameTaken(username, excluding: userID)
+        } catch {
+            return nil
+        }
+    }
+
+    /// Saves profile edits and waits for the server, so a taken username is reported instead of
+    /// silently rolled back. Returns false (with `lastError` set) if it failed.
+    func saveProfile(_ user: User) async -> Bool {
+        guard user.id == currentUserID else { return false }
+        do {
+            try await repository.saveUser(user)
+        } catch {
+            lastError = error.localizedDescription
+            return false
+        }
+        users[user.id] = user
+        userIndex.upsert(searchItem(for: user))
+        searchIndexVersion += 1
+        followHomePlaces(of: user)
+        return true
+    }
+
     /// Saves edits to the current user's profile.
     func updateProfile(_ user: User) {
         guard user.id == currentUserID else { return }
@@ -558,7 +586,7 @@ final class AppStore {
     /// Profile setup for a new account; signs in as the new user.
     func createAccount(_ user: User) async -> Bool {
         guard isUsernameAvailable(user.username) else {
-            lastError = "That username is taken."
+            lastError = RepositoryError.usernameTaken(user.username).localizedDescription
             return false
         }
         do {

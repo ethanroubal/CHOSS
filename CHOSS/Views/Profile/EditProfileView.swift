@@ -17,6 +17,13 @@ struct EditProfileView: View {
     @State private var user: User
     @State private var isSaving = false
     @State private var error: String?
+    /// The username when the screen opened (keeping your own name isn't "taken").
+    private let originalUsername: String
+    @State private var usernameCheck: UsernameCheck = .idle
+
+    private enum UsernameCheck: Equatable {
+        case idle, checking, available, taken, unknown
+    }
     @State private var photoItem: PhotosPickerItem?
     @State private var photoToFrame: PhotoToFrame?
     @State private var isLoadingPhoto = false
@@ -30,6 +37,7 @@ struct EditProfileView: View {
     /// Edit an existing profile.
     init(user: User) {
         mode = .edit
+        originalUsername = user.username.lowercased()
         _user = State(initialValue: user)
     }
 
@@ -41,6 +49,7 @@ struct EditProfileView: View {
     /// Set up the profile for a just-created account (its id is the signed-in user's id).
     init(newAccountID: User.ID) {
         mode = .setup
+        originalUsername = ""
         _user = State(initialValue: User(id: newAccountID, username: "", displayName: "", bio: ""))
     }
 
@@ -68,6 +77,7 @@ struct EditProfileView: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .textContentType(.username)
+                    usernameStatus
                     TextField("Bio", text: $user.bio, axis: .vertical)
                         .lineLimit(2...4)
                     NavigationLink {
@@ -123,6 +133,8 @@ struct EditProfileView: View {
                     photoToFrame = nil
                 }
             }
+            // Check the username with the server shortly after typing stops.
+            .task(id: cleanUsername) { await checkUsername() }
             // Dragging the form down puts the keyboard away.
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle(mode == .setup ? "Set up your profile" : "Edit profile")
@@ -143,7 +155,7 @@ struct EditProfileView: View {
                         .disabled(!isValid || isSaving)
                 }
             }
-            .alert("Couldn't save", isPresented: Binding(
+            .alert(usernameCheck == .taken ? "Username taken" : "Couldn't save", isPresented: Binding(
                 get: { error != nil },
                 set: { if !$0 { error = nil } }
             )) {
@@ -230,33 +242,83 @@ struct EditProfileView: View {
         user.username.trimmingCharacters(in: .whitespaces).lowercased()
     }
 
+    private var hasValidUsernameFormat: Bool {
+        cleanUsername.count >= 3
+            && cleanUsername.allSatisfy { $0.isLetter || $0.isNumber || $0 == "_" || $0 == "." }
+    }
+
     private var isValid: Bool {
         !user.displayName.trimmingCharacters(in: .whitespaces).isEmpty
-            && cleanUsername.count >= 3
-            && cleanUsername.allSatisfy { $0.isLetter || $0.isNumber || $0 == "_" || $0 == "." }
+            && hasValidUsernameFormat
+            && usernameCheck != .taken
+    }
+
+    /// Under the username field: checking… / available / taken.
+    @ViewBuilder
+    private var usernameStatus: some View {
+        switch usernameCheck {
+        case .checking:
+            Label("Checking @\(cleanUsername)…", systemImage: "hourglass")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        case .available:
+            Label("@\(cleanUsername) is available", systemImage: "checkmark.circle.fill")
+                .font(.footnote)
+                .foregroundStyle(.green)
+        case .taken:
+            Label("@\(cleanUsername) is already taken", systemImage: "xmark.circle.fill")
+                .font(.footnote)
+                .foregroundStyle(.red)
+        case .idle, .unknown:
+            EmptyView()
+        }
+    }
+
+    private func checkUsername() async {
+        let name = cleanUsername
+        guard hasValidUsernameFormat, name != originalUsername else {
+            usernameCheck = .idle
+            return
+        }
+        usernameCheck = .checking
+        try? await Task.sleep(for: .milliseconds(400))   // wait for typing to pause
+        guard !Task.isCancelled else { return }
+        let available = await store.checkUsernameAvailable(name, excluding: user.id)
+        guard !Task.isCancelled, name == cleanUsername else { return }
+        switch available {
+        case .some(true): usernameCheck = .available
+        case .some(false): usernameCheck = .taken
+        case .none: usernameCheck = .unknown   // offline: the save re-checks
+        }
     }
 
     private func save() {
         var saved = user
         saved.username = cleanUsername
         saved.displayName = user.displayName.trimmingCharacters(in: .whitespaces)
-        guard store.isUsernameAvailable(saved.username, excluding: saved.id) else {
-            error = "@\(saved.username) is taken. Try another username."
-            return
-        }
-        switch mode {
-        case .edit:
-            store.updateProfile(saved)
-            dismiss()
-        case .setup:
-            isSaving = true
-            Task {
+        isSaving = true
+        Task {
+            defer { isSaving = false }
+            // Check again right before saving (someone may have just taken it).
+            if saved.username != originalUsername,
+               await store.checkUsernameAvailable(saved.username, excluding: saved.id) == false {
+                usernameCheck = .taken
+                error = "@\(saved.username) is already taken. Try another username."
+                return
+            }
+            switch mode {
+            case .edit:
+                if await store.saveProfile(saved) {
+                    dismiss()
+                } else {
+                    error = store.lastError ?? "Couldn't save your profile. Try again."
+                }
+            case .setup:
                 if await store.createAccount(saved) {
                     dismiss()
                 } else {
                     error = store.lastError ?? "Something went wrong."
                 }
-                isSaving = false
             }
         }
     }

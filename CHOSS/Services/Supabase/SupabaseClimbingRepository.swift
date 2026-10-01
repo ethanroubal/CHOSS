@@ -238,9 +238,25 @@ final class SupabaseClimbingRepository: ClimbingRepository, @unchecked Sendable 
 
     // MARK: - Profiles
 
+    /// The username column is case-insensitive (citext), so this finds "Sam" for "sam".
+    func isUsernameTaken(_ username: String, excluding userID: User.ID) async throws -> Bool {
+        let matches: [IDRow] = try await client.from("profiles").select("id")
+            .eq("username", value: username).limit(2).execute().value
+        return matches.contains { $0.id.lowercased() != userID.lowercased() }
+    }
+
     /// Creates or updates your profile, then its home places and projects. A new profile
-    /// picture (a local file) is uploaded first.
+    /// picture (a local file) is uploaded first. The database's unique username rule is the
+    /// final check: losing a race for a name becomes `RepositoryError.usernameTaken`.
     func saveUser(_ user: User) async throws {
+        do {
+            try await saveUserRows(user)
+        } catch let error as PostgrestError where error.code == "23505" {  // unique violation
+            throw RepositoryError.usernameTaken(user.username)
+        }
+    }
+
+    private func saveUserRows(_ user: User) async throws {
         var avatarPath: String?? = .none   // .none: leave as is; .some(nil): remove
         if let url = user.avatarURL {
             let local = AvatarStorage.resolve(url)

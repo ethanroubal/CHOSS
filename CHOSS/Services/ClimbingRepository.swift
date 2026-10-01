@@ -17,10 +17,12 @@ struct AppSnapshot {
 
 enum RepositoryError: LocalizedError {
     case notAllowed
+    case usernameTaken(String)
 
     var errorDescription: String? {
         switch self {
         case .notAllowed: "You can only do that to things you added."
+        case .usernameTaken(let name): "@\(name) is already taken. Try another username."
         }
     }
 }
@@ -41,8 +43,11 @@ protocol ClimbingRepository: Sendable {
     func addPlace(_ place: Place) async throws -> Place
     /// User-submitted outdoor climb that wasn't in the database yet.
     func addClimb(_ climb: Climb) async throws -> Climb
-    /// Creates or updates a profile (sign-up and "Edit profile").
+    /// Creates or updates a profile (sign-up and "Edit profile"). Throws
+    /// `RepositoryError.usernameTaken` if someone else has the username.
     func saveUser(_ user: User) async throws
+    /// Whether anyone other than `userID` already has this username (ignoring case).
+    func isUsernameTaken(_ username: String, excluding userID: User.ID) async throws -> Bool
     func addRepost(_ repost: Repost) async throws
     func removeRepost(postID: Post.ID, by userID: User.ID) async throws
     func addCommunityPhoto(_ photo: CommunityPhoto) async throws

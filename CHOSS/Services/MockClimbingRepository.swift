@@ -67,7 +67,14 @@ actor MockClimbingRepository: ClimbingRepository {
         return climb
     }
 
+    func isUsernameTaken(_ username: String, excluding userID: User.ID) async throws -> Bool {
+        snapshot.users.contains { $0.username.lowercased() == username.lowercased() && $0.id != userID }
+    }
+
     func saveUser(_ user: User) async throws {
+        if try await isUsernameTaken(user.username, excluding: user.id) {
+            throw RepositoryError.usernameTaken(user.username)
+        }
         if let index = snapshot.users.firstIndex(where: { $0.id == user.id }) {
             snapshot.users[index] = user
         } else {
