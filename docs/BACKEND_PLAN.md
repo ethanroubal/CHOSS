@@ -181,12 +181,12 @@ To run on the old sample data with no account, launch with `-useDemoData YES` (X
    ```
    This applies everything in `supabase/migrations`: tables, security rules, grades and
    picture storage.
-3. **Load the 3,663 gyms and crags:**
+3. **Load the 3,663 gyms and crags.** This needs `psql` (`brew install libpq && brew link --force libpq`)
+   and your project's connection string: Supabase dashboard → **Connect** (top bar) → **Session
+   pooler** → copy the URI and put your database password in place of `[YOUR-PASSWORD]`.
    ```sh
-   psql "$(supabase db url --linked)" -f supabase/seed.sql
+   psql "<connection string>" -f supabase/seed.sql
    ```
-   If `db url` isn't available in your CLI version, copy the connection string from the
-   dashboard (Connect → Session pooler) and use that in place of `$(...)`.
 4. **Configure sign-in** in Supabase → Authentication:
    - **Email:** on by default. For quick testing you can turn off "Confirm email" (Sign In /
      Providers → Email); turn it back on for production.
