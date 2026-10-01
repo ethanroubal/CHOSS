@@ -4,7 +4,9 @@ import Foundation
 struct AppSnapshot {
     var users: [User]
     var places: [Place]
-    /// Permanent outdoor climbs at crags.
+    /// Permanent outdoor climbs at crags. A server snapshot has only the ones it needs (in
+    /// posts, projects, photos, plus the most filmed); the rest load a crag at a time
+    /// (`ClimbingRepository.climbs(at:)`).
     var climbs: [Climb] = []
     var posts: [Post]
     /// userID → places that user follows.
@@ -55,4 +57,14 @@ protocol ClimbingRepository: Sendable {
     /// `RepositoryError.notAllowed` (a real backend must enforce this server-side too).
     func deleteCommunityPhoto(_ photoID: CommunityPhoto.ID, by userID: User.ID) async throws
     func setPhotoLike(photoID: CommunityPhoto.ID, liked: Bool, by userID: User.ID) async throws
+
+    /// Every climb at a crag. nil: the snapshot already has every climb (demo data).
+    func climbs(at placeID: Place.ID) async throws -> [Climb]?
+    /// Climbs at any crag whose name matches, best match first. nil: search the snapshot instead.
+    func searchClimbs(_ query: String, limit: Int) async throws -> [Climb]?
+}
+
+extension ClimbingRepository {
+    func climbs(at placeID: Place.ID) async throws -> [Climb]? { nil }
+    func searchClimbs(_ query: String, limit: Int) async throws -> [Climb]? { nil }
 }

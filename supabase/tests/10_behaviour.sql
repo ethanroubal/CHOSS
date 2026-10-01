@@ -14,7 +14,7 @@ insert into profiles (id, username, display_name) values ((select alex from ids)
 insert into climbs (place_id, name, area, discipline, grade_system, grade_value, created_by)
   values ((select yosemite from ids), 'Midnight Lightning', 'Camp 4', 'boulder', 'vScale', 'V8', (select alex from ids));
 insert into posts (author_id, place_id, climb_id, discipline, send_style, proposed_grade_system, proposed_grade_value, caption)
-  select alex, yosemite, (select id from climbs where name = 'Midnight Lightning'), 'boulder', 'redpoint', 'vScale', 'V8', 'sent!' from ids;
+  select alex, yosemite, (select id from climbs where name = 'Midnight Lightning' and created_by is not null), 'boulder', 'redpoint', 'vScale', 'V8', 'sent!' from ids;
 reset role;
 update posts set video_status = 'ready';   -- what the Mux webhook does
 
@@ -28,7 +28,7 @@ insert into post_likes (post_id, user_id) select id, (select sam from ids) from 
 select record_view(id) from posts;
 select record_view(id) from posts;   -- same day: not counted again
 insert into posts (author_id, place_id, climb_id, discipline, send_style, proposed_grade_system, proposed_grade_value)
-  select sam, yosemite, (select id from climbs where name = 'Midnight Lightning'), 'boulder', 'flash', 'font', '7B+' from ids;
+  select sam, yosemite, (select id from climbs where name = 'Midnight Lightning' and created_by is not null), 'boulder', 'flash', 'font', '7B+' from ids;
 do $$ begin
   begin update posts set like_count = 999; raise exception 'CHEAT WORKED: like_count';
   exception when insufficient_privilege then raise notice 'ok: clients cannot write counters'; end;
@@ -68,3 +68,8 @@ select 'photos after alex delete attempt' as check, count(*) from community_phot
 insert into photo_likes (photo_id, user_id) select id, (select alex from ids) from community_photos where storage_path = 'x/1.jpg';
 reset role;
 select 'cover is most liked' as check, (select storage_path from community_photos where id = cover_photo_id) from places where id = (select yosemite from ids);
+
+-- The imported outdoor climbs (supabase/seeds) all landed at their crags.
+select 'imported climbs' as check, count(*) as climbs, count(distinct place_id) as crags,
+       count(*) filter (where grade_value is not null) as graded
+  from climbs where created_by is null;

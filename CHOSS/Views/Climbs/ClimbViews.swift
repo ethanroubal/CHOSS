@@ -324,6 +324,10 @@ struct AddClimbView: View {
                         .disabled(trimmedName.isEmpty || cragID == nil || isSaving)
                 }
             }
+            // The crag's climbs (for area suggestions and "Did you mean…?").
+            .task(id: cragID) {
+                if let cragID { await store.loadClimbs(at: cragID) }
+            }
             .onChange(of: cragID) { _, _ in
                 // Areas and disciplines belong to the crag; reset what no longer fits.
                 if !knownAreas.contains(area) { area = "" }

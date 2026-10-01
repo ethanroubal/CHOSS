@@ -15,7 +15,7 @@ pg_ctl -D "$DIR/data" -o "-k $DIR -p $PORT -c listen_addresses=" -l "$DIR/log" s
 PSQL=(psql -h "$DIR" -p "$PORT" -U postgres -v ON_ERROR_STOP=1 -q)
 "${PSQL[@]}" -c "create database choss" >/dev/null
 
-for f in supabase/tests/00_local_supabase_stub.sql supabase/migrations/*.sql supabase/seed.sql; do
+for f in supabase/tests/00_local_supabase_stub.sql supabase/migrations/*.sql supabase/seed.sql supabase/seeds/*.sql; do
   echo "applying $f"
   "${PSQL[@]}" -d choss -f "$f" >/dev/null
 done

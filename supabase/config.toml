@@ -1,0 +1,8 @@
+# Supabase CLI settings. Anything not listed here uses the CLI's defaults.
+project_id = "CHOSS"
+
+[db.seed]
+# `supabase db push --include-seed` / `supabase db reset` run these in order:
+# the gyms and crags first, then the outdoor climbs at those crags.
+enabled = true
+sql_paths = ["./seed.sql", "./seeds/climbs_*.sql"]

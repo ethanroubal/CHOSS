@@ -6,7 +6,10 @@ import Supabase
 ///
 /// For now it loads one snapshot at launch, like the demo data, so every screen works
 /// unchanged:
-/// - all places and climbs;
+/// - all places;
+/// - the climbs those need (in sends, projects and photos) plus the most filmed. A crag's other
+///   climbs load when its page or the route picker opens (`climbs(at:)`), and climb search runs
+///   on the server (`searchClimbs`): there are 200k+ outdoor climbs.
 /// - the latest 400 sends plus your own;
 /// - the people involved;
 /// - follows, likes, comments, reposts, photos and projects.
@@ -21,6 +24,7 @@ final class SupabaseClimbingRepository: ClimbingRepository, @unchecked Sendable 
     private let userID: String
     private let pageSize = 1000
     private let recentPostLimit = 400
+    private let popularClimbLimit = 200
     /// Local avatar file → its uploaded path, so later profile saves (e.g. adding a project)
     /// don't upload the same picture again.
     private var uploadedAvatars: [String: String] = [:]
@@ -35,7 +39,9 @@ final class SupabaseClimbingRepository: ClimbingRepository, @unchecked Sendable 
 
     func loadSnapshot() async throws -> AppSnapshot {
         async let placeRows: [PlaceRecord] = allPages("places", columns: PlaceRecord.columns, order: "name")
-        async let climbRows: [ClimbRecord] = allPages("climbs", columns: ClimbRecord.columns, order: "name")
+        async let popularClimbRows: [ClimbRecord] = client.from("climbs").select(ClimbRecord.columns)
+            .gt("post_count", value: 0).order("post_count", ascending: false).limit(popularClimbLimit)
+            .execute().value
         async let recentRows: [PostRow] = client.from("posts").select(PostRow.columns)
             .order("created_at", ascending: false).limit(recentPostLimit).execute().value
         async let myRows: [PostRow] = client.from("posts").select(PostRow.columns)
@@ -78,10 +84,22 @@ final class SupabaseClimbingRepository: ClimbingRepository, @unchecked Sendable 
         let likes = try await likeRows
         let photoLikes = try await photoLikeRows
         let homes = Dictionary(grouping: try await homeRows, by: \.user_id)
-        let projects = Dictionary(grouping: try await projectRows, by: \.user_id)
         let likedBy = Dictionary(grouping: likes, by: \.post_id).mapValues { Set($0.map(\.user_id)) }
         let commentsByPost = Dictionary(grouping: comments, by: \.post_id)
         let photoLikedBy = Dictionary(grouping: photoLikes, by: \.photo_id).mapValues { Set($0.map(\.user_id)) }
+
+        let projectsList = try await projectRows
+        let projects = Dictionary(grouping: projectsList, by: \.user_id)
+        // The climbs anything on screen points at.
+        var climbIDs = Set(postsByID.values.compactMap(\.climb_id))
+        climbIDs.formUnion(projectsList.map(\.climb_id))
+        climbIDs.formUnion(photos.compactMap(\.climb_id))
+        var climbsByID: [String: Climb] = [:]
+        for row in try await popularClimbRows { climbsByID[row.id] = row.climb }
+        climbIDs.subtract(climbsByID.keys)
+        let referencedClimbs: [ClimbRecord] = try await rows(in: "climbs", columns: ClimbRecord.columns,
+                                                             key: "id", values: Array(climbIDs))
+        for row in referencedClimbs { climbsByID[row.id] = row.climb }
 
         let users = try await profileRows.map { row in
             row.user(
@@ -103,7 +121,7 @@ final class SupabaseClimbingRepository: ClimbingRepository, @unchecked Sendable 
         return AppSnapshot(
             users: users,
             places: try await placeRows.map(\.place),
-            climbs: try await climbRows.map(\.climb),
+            climbs: Array(climbsByID.values),
             posts: posts,
             followedPlaces: Dictionary(grouping: placeFollows, by: \.user_id).mapValues { Set($0.map(\.place_id)) },
             followedUsers: Dictionary(grouping: userFollows, by: \.follower_id).mapValues { Set($0.map(\.followee_id)) },
@@ -234,6 +252,28 @@ final class SupabaseClimbingRepository: ClimbingRepository, @unchecked Sendable 
         let row: ClimbRecord = try await client.from("climbs").insert(ClimbInsert(climb, createdBy: userID))
             .select(ClimbRecord.columns).single().execute().value
         return row.climb
+    }
+
+    // MARK: - Climbs
+
+    func climbs(at placeID: Place.ID) async throws -> [Climb]? {
+        var all: [Climb] = []
+        var from = 0
+        while true {
+            let page: [ClimbRecord] = try await client.from("climbs").select(ClimbRecord.columns)
+                .eq("place_id", value: placeID).order("name").order("id")
+                .range(from: from, to: from + pageSize - 1).execute().value
+            all += page.map(\.climb)
+            if page.count < pageSize { return all }
+            from += pageSize
+        }
+    }
+
+    func searchClimbs(_ query: String, limit: Int) async throws -> [Climb]? {
+        let rows: [ClimbRecord] = try await client
+            .rpc("search_climbs", params: SearchClimbsParams(q: query, max_results: min(limit, 100)))
+            .select(ClimbRecord.columns).execute().value
+        return rows.map(\.climb)
     }
 
     // MARK: - Profiles
@@ -417,6 +457,11 @@ private struct ClimbRecord: Decodable {
         return Climb(id: id, placeID: place_id, name: name, area: area, discipline: discipline, grade: grade,
                      about: about, source: .curated, isVerified: is_verified, createdBy: created_by)
     }
+}
+
+private struct SearchClimbsParams: Encodable {
+    let q: String
+    let max_results: Int
 }
 
 private struct ClimbInsert: Encodable {

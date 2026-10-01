@@ -67,6 +67,9 @@ final class AppStore {
     @ObservationIgnored private var popularPlacesCacheVersion = -1
     @ObservationIgnored private var trendingCache: [String: [Post.ID]] = [:]
     @ObservationIgnored private var trendingCacheVersion = -1
+    /// Crags whose full climb list has been fetched / is being fetched (`loadClimbs(at:)`).
+    private var climbsLoadedPlaces: Set<Place.ID> = []
+    @ObservationIgnored private var climbsLoadingPlaces: Set<Place.ID> = []
     @ObservationIgnored private var mostFilmedClimbsCache: [Climb.ID] = []
     @ObservationIgnored private var mostFilmedClimbsCacheVersion = -1
     @ObservationIgnored private var popularUsersCache: [User.ID] = []
@@ -108,7 +111,9 @@ final class AppStore {
     private func apply(_ snapshot: AppSnapshot) {
         users = Dictionary(uniqueKeysWithValues: snapshot.users.map { ($0.id, $0) })
         places = Dictionary(uniqueKeysWithValues: snapshot.places.map { ($0.id, $0) })
-        climbs = Dictionary(uniqueKeysWithValues: snapshot.climbs.map { ($0.id, $0) })
+        // Keep climbs fetched since launch (a crag's list, search results): a server snapshot
+        // only has the climbs it needs, and pages showing the others stay open across a reload.
+        climbs.merge(snapshot.climbs.map { ($0.id, $0) }) { _, new in new }
         posts = snapshot.posts.sorted { $0.createdAt > $1.createdAt }
         followedPlaces = snapshot.followedPlaces
         followedUsers = snapshot.followedUsers
@@ -652,9 +657,53 @@ final class AppStore {
 
     // MARK: - Outdoor climbs
 
-    /// Every climb at a crag, alphabetically.
+    /// Every climb at a crag, alphabetically. On the server's data, call `loadClimbs(at:)`
+    /// first: until then this holds only the crag's climbs the app has already come across.
     func climbs(at placeID: Place.ID) -> [Climb] {
         (climbIDsByPlace[placeID] ?? []).compactMap { climbs[$0] }
+    }
+
+    /// Fetches every climb at a crag (once; again with `force`, e.g. pull to refresh).
+    func loadClimbs(at placeID: Place.ID, force: Bool = false) async {
+        guard force || !climbsLoadedPlaces.contains(placeID), !climbsLoadingPlaces.contains(placeID) else { return }
+        climbsLoadingPlaces.insert(placeID)
+        defer { climbsLoadingPlaces.remove(placeID) }
+        do {
+            if let list = try await repository.climbs(at: placeID) { merge(list) }
+        } catch {
+            lastError = error.localizedDescription  // pull to refresh tries again
+        }
+        climbsLoadedPlaces.insert(placeID)
+    }
+
+    /// Whether a crag's climbs are still on their way (show a spinner, not "no climbs").
+    func isLoadingClimbs(at placeID: Place.ID) -> Bool {
+        !climbsLoadedPlaces.contains(placeID)
+    }
+
+    /// Adds fetched climbs to the store (replacing older copies).
+    private func merge(_ list: [Climb]) {
+        guard !list.isEmpty else { return }
+        // Work on copies and assign once, so views update once (not once per climb).
+        var all = climbs
+        var byPlace = climbIDsByPlace
+        var touched = Set<Place.ID>()
+        for climb in list {
+            let old = all[climb.id]
+            if let old, old.placeID != climb.placeID {
+                byPlace[old.placeID]?.removeAll { $0 == climb.id }
+            }
+            if old?.placeID != climb.placeID {
+                byPlace[climb.placeID, default: []].append(climb.id)
+            }
+            all[climb.id] = climb
+            touched.insert(climb.placeID)
+        }
+        for placeID in touched {
+            byPlace[placeID]?.sort { (all[$0]?.name ?? "") < (all[$1]?.name ?? "") }
+        }
+        climbs = all
+        climbIDsByPlace = byPlace
     }
 
     /// Every send video of a climb (its beta), newest first.
@@ -714,7 +763,14 @@ final class AppStore {
         }.value
     }
 
+    /// Climbs at every crag. On the server's data the server searches them all; the local index
+    /// (climbs already loaded) is the fallback if that fails, and what demo data uses.
     func searchClimbIDs(_ query: String, limit: Int = 100) async -> [Climb.ID] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty, let found = try? await repository.searchClimbs(trimmed, limit: limit) {
+            merge(found)
+            return found.map(\.id)
+        }
         let index = climbIndex
         return await Task.detached(priority: .userInitiated) { index.search(query, limit: limit) }.value
     }

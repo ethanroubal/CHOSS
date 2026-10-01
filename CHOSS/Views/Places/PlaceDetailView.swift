@@ -85,7 +85,14 @@ struct PlaceDetailView: View {
         // navigation bar, cutting off the top of the page, so the page just anchors to the top.)
         .defaultScrollAnchor(.top)
         // Pull down to load sends (and photos, climbs…) posted since the page opened.
-        .refreshable { await store.load() }
+        .refreshable {
+            await store.load()
+            if store.place(placeID)?.kind == .crag { await store.loadClimbs(at: placeID, force: true) }
+        }
+        // A crag's climbs come from the server when its page opens (there can be thousands).
+        .task(id: placeID) {
+            if store.place(placeID)?.kind == .crag { await store.loadClimbs(at: placeID) }
+        }
     }
 
     /// A static preview; tapping it opens the full, interactive map.
@@ -250,7 +257,11 @@ struct PlaceDetailView: View {
                 listControls
             }
 
-            if results.isEmpty, let gradeFilter, !unfiltered.isEmpty {
+            if results.isEmpty && store.isLoadingClimbs(at: place.id) {
+                ProgressView("Loading climbs…")
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 40)
+            } else if results.isEmpty, let gradeFilter, !unfiltered.isEmpty {
                 ContentUnavailableView {
                     Label("No climbs in \(gradeFilter.display)", systemImage: "line.3.horizontal.decrease.circle")
                 } description: {
@@ -269,7 +280,7 @@ struct PlaceDetailView: View {
                 switch climbSort {
                 case .popularity:
                     // `searchClimbs` with no query is already most-sent first.
-                    VStack(spacing: 0) {
+                    LazyVStack(spacing: 0) {
                         ForEach(results) { climb in climbLink(climb) }
                     }
                 case .area:
@@ -284,7 +295,7 @@ struct PlaceDetailView: View {
                     }
                 }
             } else {
-                VStack(spacing: 0) {
+                LazyVStack(spacing: 0) {
                     ForEach(results) { climb in
                         climbLink(climb)
                     }
@@ -376,7 +387,8 @@ struct PlaceDetailView: View {
     }
 
     private func climbGroup(_ title: String, _ climbs: [Climb]) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
+        // Lazy: a big crag has thousands of climbs.
+        LazyVStack(alignment: .leading, spacing: 0) {
             Text(title)
                 .font(.subheadline.bold())
                 .foregroundStyle(.secondary)

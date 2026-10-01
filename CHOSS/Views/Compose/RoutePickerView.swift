@@ -59,7 +59,13 @@ struct RoutePickerView: View {
         .overlay {
             if placeID == nil && results.isEmpty(for: query) {
                 ContentUnavailableView.search(text: query)
+            } else if let placeID, matchingClimbs.isEmpty, store.isLoadingClimbs(at: placeID) {
+                ProgressView("Loading climbs…")
             }
+        }
+        // The crag's climbs come from the server (there can be thousands).
+        .task(id: placeID) {
+            if let placeID { await store.loadClimbs(at: placeID) }
         }
         .navigationTitle("Problem / route")
         .navigationBarTitleDisplayMode(.inline)
