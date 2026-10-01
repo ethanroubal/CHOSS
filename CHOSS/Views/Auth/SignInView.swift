@@ -63,7 +63,7 @@ struct SignInView: View {
                         .focused($focused)
                         .padding(12)
                         .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
-                    SecureField("Password (8+ characters)", text: $password)
+                    SecureField(mode == .signUp ? "Password (6+ characters)" : "Password", text: $password)
                         .textContentType(mode == .signIn ? .password : .newPassword)
                         .focused($focused)
                         .padding(12)
@@ -72,17 +72,19 @@ struct SignInView: View {
                     Button(action: submitEmail) {
                         Group {
                             if session.isWorking {
-                                ProgressView()
+                                ProgressView().tint(Brand.onAccent)
                             } else {
-                                Text(mode.rawValue).bold()
+                                Text(mode.rawValue).bold().foregroundStyle(Brand.onAccent)
                             }
                         }
                         .frame(maxWidth: .infinity)
                         .frame(height: 34)
                     }
                     .buttonStyle(.borderedProminent)
-                    .foregroundStyle(Brand.onAccent)
-                    .disabled(!canSubmit || session.isWorking)
+                    .tint(Color.accentColor)
+                    // Always tappable (a greyed-out button doesn't say what's missing); a tap
+                    // with something missing explains it instead.
+                    .disabled(session.isWorking)
 
                     if mode == .signIn {
                         Button("Forgot password?") {
@@ -126,13 +128,29 @@ struct SignInView: View {
         }
     }
 
-    private var canSubmit: Bool {
-        email.contains("@") && password.count >= 8
+    /// Supabase's default minimum password length.
+    private let minimumPassword = 6
+
+    /// What's missing before the form can be sent, in plain words (nil when it's ready).
+    private var missing: String? {
+        let trimmed = email.trimmingCharacters(in: .whitespaces)
+        if trimmed.isEmpty { return "Enter your email." }
+        if !trimmed.contains("@") || !trimmed.contains(".") { return "That email doesn't look right." }
+        if password.isEmpty { return "Enter your password." }
+        if mode == .signUp && password.count < minimumPassword {
+            return "Use at least \(minimumPassword) characters for your password."
+        }
+        return nil
     }
 
     private func submitEmail() {
         focused = false
         notice = nil
+        if let missing {
+            session.errorMessage = missing
+            return
+        }
+        let email = email.trimmingCharacters(in: .whitespaces)
         Task {
             switch mode {
             case .signIn:
@@ -158,8 +176,13 @@ struct SignInView: View {
             }
             Task { await session.signInWithApple(idToken: token, rawNonce: nonce) }
         case .failure(let error):
-            // Cancelling isn't an error worth showing.
-            if (error as? ASAuthorizationError)?.code != .canceled {
+            switch (error as? ASAuthorizationError)?.code {
+            case .canceled:
+                break  // not worth an error
+            case .unknown:
+                // 1000: the app isn't allowed to use Sign in with Apple yet (missing capability).
+                session.errorMessage = "Sign in with Apple isn't set up for this build yet. Use email for now."
+            default:
                 session.errorMessage = error.localizedDescription
             }
         }
