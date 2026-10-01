@@ -33,19 +33,22 @@ struct ExploreView: View {
                 case .map: mapView
                 }
             }
-            .navigationTitle("Explore")
-            // Compact bar: a large title that collapses on scroll fights the switcher in the
-            // title slot and makes the page jump around when you scroll back to the top.
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Picker("Mode", selection: $mode) {
-                        ForEach(Mode.allCases) { Text($0.rawValue).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: 180)
+            // The Sends / Map switch sits just under the bar, not in the bar's title slot: custom
+            // views there can leave the bar mis-sized on pages opened from here (their tops
+            // ended up hidden under it).
+            .safeAreaInset(edge: .top, spacing: 0) {
+                Picker("Mode", selection: $mode) {
+                    ForEach(Mode.allCases) { Text($0.rawValue).tag($0) }
                 }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 240)
+                .padding(.horizontal)
+                .padding(.vertical, 6)
+                .frame(maxWidth: .infinity)
+                .background(.bar)
             }
+            .navigationTitle("Explore")
+            .navigationBarTitleDisplayMode(.inline)
             .withAppRoutes()
         }
     }

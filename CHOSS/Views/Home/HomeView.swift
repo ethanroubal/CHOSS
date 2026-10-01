@@ -32,11 +32,13 @@ struct HomeView: View {
                 }
             }
             .refreshable { await store.load() }
-            // "Home" is what the back button says on pushed screens; the header shows the wordmark.
-            .navigationTitle("Home")
+            // No text title: the wordmark is the header (pushed screens' back button says "Back").
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .principal) {
+                // The wordmark sits on the left (like Instagram's), not in the bar's title slot:
+                // a custom view there can leave the bar mis-sized on pages opened from Home.
+                ToolbarItem(placement: .topBarLeading) {
                     WordmarkView(height: 24)
                 }
             }
