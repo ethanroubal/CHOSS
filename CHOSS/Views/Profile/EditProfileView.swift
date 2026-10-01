@@ -123,6 +123,8 @@ struct EditProfileView: View {
                     photoToFrame = nil
                 }
             }
+            // Dragging the form down puts the keyboard away.
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle(mode == .setup ? "Set up your profile" : "Edit profile")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

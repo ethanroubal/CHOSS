@@ -111,6 +111,7 @@ struct PlacePickerView: View {
 /// other places are disabled until one is removed.
 struct HomePlacesPickerView: View {
     @Environment(AppStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
     @Binding var selection: [Place.ID]
 
     @State private var query = ""
@@ -186,9 +187,17 @@ struct HomePlacesPickerView: View {
         }
         .navigationTitle("Home gyms / crags")
         .navigationBarTitleDisplayMode(.inline)
+        .scrollDismissesKeyboard(.immediately)
         .toolbar {
             if selection.count > 1 {
-                EditButton()
+                ToolbarItem(placement: .topBarTrailing) {
+                    EditButton()
+                }
+            }
+            // Picks apply as you tap; Done goes back to the profile with them.
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Done") { dismiss() }
+                    .bold()
             }
         }
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
