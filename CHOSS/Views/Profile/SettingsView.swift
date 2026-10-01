@@ -3,7 +3,12 @@ import SwiftUI
 /// The gear on your profile: your activity and account settings.
 struct SettingsView: View {
     @Environment(AppStore.self) private var store
+    /// Sign out / delete account (nil with demo data, where there's no account).
+    @Environment(\.accountActions) private var accountActions
     @State private var editingProfile = false
+    @State private var confirmingDelete = false
+    @State private var isDeleting = false
+    @State private var deleteFailed = false
 
     var body: some View {
         List {
@@ -28,7 +33,55 @@ struct SettingsView: View {
                 } label: {
                     Label("Edit profile", systemImage: "person.crop.circle")
                 }
+                if let accountActions {
+                    if let email = accountActions.email {
+                        LabeledContent("Signed in as", value: email)
+                    }
+                    Button {
+                        Task { await accountActions.signOut() }
+                    } label: {
+                        Label("Sign out", systemImage: "rectangle.portrait.and.arrow.right")
+                    }
+                }
             }
+
+            if let accountActions {
+                Section {
+                    Button(role: .destructive) {
+                        confirmingDelete = true
+                    } label: {
+                        if isDeleting {
+                            ProgressView()
+                        } else {
+                            Label("Delete account", systemImage: "trash")
+                        }
+                    }
+                    .disabled(isDeleting)
+                } footer: {
+                    Text("Permanently deletes your profile, sends, comments, photos and likes.")
+                }
+                .confirmationDialog("Delete your account?", isPresented: $confirmingDelete, titleVisibility: .visible) {
+                    Button("Delete account and everything in it", role: .destructive) {
+                        isDeleting = true
+                        Task {
+                            deleteFailed = !(await accountActions.deleteAccount())
+                            isDeleting = false
+                        }
+                    }
+                } message: {
+                    Text("This can't be undone.")
+                }
+            }
+
+            Section {
+            } footer: {
+                Text("Data: \(BackendEnvironment.current.displayName)")
+            }
+        }
+        .alert("Couldn't delete your account", isPresented: $deleteFailed) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Check your connection and try again.")
         }
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)

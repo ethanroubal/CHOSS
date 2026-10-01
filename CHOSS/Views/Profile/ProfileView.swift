@@ -8,8 +8,11 @@ struct MyProfileTab: View {
         NavigationStack {
             ProfileView(userID: store.currentUserID)
                 .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        DemoAccountMenu()
+                    // Switching between sample people only makes sense with demo data.
+                    if BackendEnvironment.current == .demo {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            DemoAccountMenu()
+                        }
                     }
                     ToolbarItem(placement: .topBarTrailing) {
                         // Value-based, like every in-app link, so links on the pushed screens

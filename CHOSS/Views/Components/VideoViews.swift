@@ -19,6 +19,15 @@ final class ThumbnailCache {
         cache.setObject(image, forKey: url as NSURL)
         return image
     }
+
+    /// A poster image downloaded from a URL (e.g. Mux's thumbnail), cached like grabbed frames.
+    func image(at url: URL) async -> UIImage? {
+        if let cached = cache.object(forKey: url as NSURL) { return cached }
+        guard let (data, _) = try? await URLSession.shared.data(from: url),
+              let image = UIImage(data: data) else { return nil }
+        cache.setObject(image, forKey: url as NSURL)
+        return image
+    }
 }
 
 /// Poster frame for a post, falling back to a colored placeholder while loading / if unavailable.
@@ -49,8 +58,12 @@ struct VideoThumbnailView: View {
         }
         .clipped()
         .task(id: post.videoURL) {
-            guard let url = post.videoURL else { return }
-            image = await ThumbnailCache.shared.thumbnail(for: url)
+            // Server videos come with a poster image (Mux); local ones get a frame grabbed.
+            if let poster = post.thumbnailURL {
+                image = await ThumbnailCache.shared.image(at: poster)
+            } else if let url = post.videoURL {
+                image = await ThumbnailCache.shared.thumbnail(for: url)
+            }
         }
     }
 }

@@ -10,7 +10,14 @@ final class PhotoImageCache {
     func image(for url: URL) async -> UIImage? {
         if let cached = cache.object(forKey: url as NSURL) { return cached }
         let loaded = await Task.detached(priority: .userInitiated) { () -> UIImage? in
-            guard let image = UIImage(contentsOfFile: url.path) else { return nil }
+            // On-device files (just added) or the server's public URL (Supabase Storage CDN).
+            let data: Data?
+            if url.isFileURL {
+                data = try? Data(contentsOf: url)
+            } else {
+                data = try? await URLSession.shared.data(from: url).0
+            }
+            guard let data, let image = UIImage(data: data) else { return nil }
             return image.preparingForDisplay() ?? image
         }.value
         if let loaded { cache.setObject(loaded, forKey: url as NSURL) }

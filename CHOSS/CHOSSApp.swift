@@ -3,8 +3,6 @@ import AVFoundation
 
 @main
 struct CHOSSApp: App {
-    @State private var store = AppStore()
-
     init() {
         // Video app audio: play sound even when the ring/silent switch is on silent
         // (the default "ambient" category mutes it), and duck other audio instead of stopping it.
@@ -14,9 +12,7 @@ struct CHOSSApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootTabView()
-                .environment(store)
-                .task { await store.load() }
+            AppRoot()
         }
     }
 }

@@ -10,6 +10,8 @@ struct EditProfileView: View {
 
     @Environment(AppStore.self) private var store
     @Environment(\.dismiss) private var dismiss
+    /// Present when signed in to a real account (nil with demo data).
+    @Environment(\.accountActions) private var accountActions
 
     let mode: Mode
     @State private var user: User
@@ -31,11 +33,15 @@ struct EditProfileView: View {
         _user = State(initialValue: user)
     }
 
-    /// Set up a brand-new profile.
+    /// Set up a brand-new profile (demo data: a made-up id).
     init() {
+        self.init(newAccountID: "u_\(UUID().uuidString)")
+    }
+
+    /// Set up the profile for a just-created account (its id is the signed-in user's id).
+    init(newAccountID: User.ID) {
         mode = .setup
-        _user = State(initialValue: User(id: "u_\(UUID().uuidString)", username: "", displayName: "",
-                                         bio: ""))
+        _user = State(initialValue: User(id: newAccountID, username: "", displayName: "", bio: ""))
     }
 
     var body: some View {
@@ -121,7 +127,13 @@ struct EditProfileView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    if mode == .setup, let accountActions {
+                        // A new account's profile setup is a full screen, not a sheet: leaving
+                        // means signing out.
+                        Button("Sign out") { Task { await accountActions.signOut() } }
+                    } else {
+                        Button("Cancel") { dismiss() }
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(mode == .setup ? "Create" : "Save", action: save)

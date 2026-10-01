@@ -31,6 +31,10 @@ shows up in your feed. You can follow individual climbers too, Instagram-style.
 
 ## Running it
 
+Debug builds use the **test** Supabase project and Release builds use **production** (see
+`CHOSS/Services/Backend.swift`), with sign-in. To use the old on-device sample data instead,
+launch with `-useDemoData YES`. Setting up the projects: [docs/BACKEND_PLAN.md](docs/BACKEND_PLAN.md#your-projects).
+
 Requires **Xcode 16+** and iOS 17+.
 
 1. Open `CHOSS.xcodeproj`.

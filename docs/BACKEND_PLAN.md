@@ -151,17 +151,74 @@ The local test checks that everything applies cleanly, and that:
 - Check both pricing pages for current numbers. Video streaming will be the main cost as
   usage grows.
 
+## Your projects
+
+| | Project | Used by |
+| --- | --- | --- |
+| Test | `https://qwnoanczqsqcygpjauoa.supabase.co` | Builds run from Xcode (Debug) |
+| Production | `https://acfijpwcfvltqizgjgoo.supabase.co` | TestFlight / App Store (Release) |
+
+Their publishable keys are in `CHOSS/Services/Backend.swift`. They're meant to ship in the app,
+because they can only do what the security rules allow. Secret / service-role keys and the
+database password never go in the app or the repo.
+
+To run on the old sample data with no account, launch with `-useDemoData YES` (Xcode: Product
+▸ Scheme ▸ Edit Scheme ▸ Run ▸ Arguments).
+
+### Set up the test project (do production the same way when ready)
+
+1. **Install the Supabase CLI and link the project.** Everything runs from the repo folder on
+   your Mac:
+   ```sh
+   brew install supabase/tap/supabase
+   supabase login
+   supabase init                                   # once; answer "N" to the VS Code questions
+   supabase link --project-ref qwnoanczqsqcygpjauoa
+   ```
+2. **Create the database:**
+   ```sh
+   supabase db push
+   ```
+   This applies everything in `supabase/migrations`: tables, security rules, grades and
+   picture storage.
+3. **Load the 3,663 gyms and crags:**
+   ```sh
+   psql "$(supabase db url --linked)" -f supabase/seed.sql
+   ```
+   If `db url` isn't available in your CLI version, copy the connection string from the
+   dashboard (Connect → Session pooler) and use that in place of `$(...)`.
+4. **Configure sign-in** in Supabase → Authentication:
+   - **Email:** on by default. For quick testing you can turn off "Confirm email" (Sign In /
+     Providers → Email); turn it back on for production.
+   - **Apple:** turn on the Apple provider and follow its instructions (Services ID, key from
+     your Apple Developer account). In Xcode, add the **Sign in with Apple** capability to the
+     CHOSS target (Signing & Capabilities → + Capability).
+5. **Deploy the server functions:**
+   ```sh
+   supabase functions deploy delete-account
+   supabase functions deploy create-video-upload
+   supabase functions deploy mux-webhook --no-verify-jwt
+   ```
+   Posting videos needs a Mux account. Set its secrets with
+   `supabase secrets set MUX_TOKEN_ID=… MUX_TOKEN_SECRET=… MUX_WEBHOOK_SECRET=…` and add the
+   webhook in Mux. Until then, everything else works, but posting a send fails with an error.
+6. **Open the project in Xcode.** It fetches the Supabase library the first time
+   (File ▸ Packages ▸ Resolve Package Versions if it doesn't), then run. You should see the
+   sign-in screen.
+
 ## Next steps in code
 
 In order; each step can ship on its own.
 
-1. **Sign-in and profiles.**
-   - Add the Supabase Swift package.
-   - Build a real sign-in screen with Sign in with Apple and email.
-   - Keep profile setup as it is, saved to `profiles`.
-   - Add "Delete account" in Settings.
-2. **A Supabase repository.** `SupabaseClimbingRepository` implements the existing
-   `ClimbingRepository`, so views don't change.
+1. **Done: sign-in and profiles.**
+   - Sign in with Apple and email.
+   - First-time profile setup, saved to `profiles`.
+   - Sign out and Delete account in Settings.
+2. **Done: a Supabase repository.** `SupabaseClimbingRepository` implements the existing
+   `ClimbingRepository`, so the views didn't change.
+   - It writes straight to the tables.
+   - For now it loads one snapshot at launch: all places and climbs, the latest 400 sends plus
+     your own, and the people, likes, comments, follows, photos and projects involved.
 3. **Load by page, not everything at once.** Today the app loads one snapshot of everything.
    With real data it should load what each screen needs:
    - the home feed via `home_feed`, 20 at a time;
