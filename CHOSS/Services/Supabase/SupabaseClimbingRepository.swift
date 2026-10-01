@@ -34,8 +34,8 @@ final class SupabaseClimbingRepository: ClimbingRepository, @unchecked Sendable 
     // MARK: - Loading
 
     func loadSnapshot() async throws -> AppSnapshot {
-        async let placeRows: [PlaceRow] = allPages("places", columns: PlaceRow.columns, order: "name")
-        async let climbRows: [ClimbRow] = allPages("climbs", columns: ClimbRow.columns, order: "name")
+        async let placeRows: [PlaceRecord] = allPages("places", columns: PlaceRecord.columns, order: "name")
+        async let climbRows: [ClimbRecord] = allPages("climbs", columns: ClimbRecord.columns, order: "name")
         async let recentRows: [PostRow] = client.from("posts").select(PostRow.columns)
             .order("created_at", ascending: false).limit(recentPostLimit).execute().value
         async let myRows: [PostRow] = client.from("posts").select(PostRow.columns)
@@ -225,14 +225,14 @@ final class SupabaseClimbingRepository: ClimbingRepository, @unchecked Sendable 
     }
 
     func addPlace(_ place: Place) async throws -> Place {
-        let row: PlaceRow = try await client.from("places").insert(PlaceInsert(place, createdBy: userID))
-            .select(PlaceRow.columns).single().execute().value
+        let row: PlaceRecord = try await client.from("places").insert(PlaceInsert(place, createdBy: userID))
+            .select(PlaceRecord.columns).single().execute().value
         return row.place
     }
 
     func addClimb(_ climb: Climb) async throws -> Climb {
-        let row: ClimbRow = try await client.from("climbs").insert(ClimbInsert(climb, createdBy: userID))
-            .select(ClimbRow.columns).single().execute().value
+        let row: ClimbRecord = try await client.from("climbs").insert(ClimbInsert(climb, createdBy: userID))
+            .select(ClimbRecord.columns).single().execute().value
         return row.climb
     }
 
@@ -339,7 +339,7 @@ enum BackendError: LocalizedError {
 private struct IDRow: Decodable { let id: String }
 private struct PhotoPathRow: Decodable { let storage_path: String }
 
-private struct PlaceRow: Decodable {
+private struct PlaceRecord: Decodable {
     static let columns = "id,external_id,name,kind,city,region,country,latitude,longitude,disciplines,about,source,is_verified,created_by"
     let id: String
     let external_id: String?
@@ -382,7 +382,7 @@ private struct PlaceInsert: Encodable {
     }
 }
 
-private struct ClimbRow: Decodable {
+private struct ClimbRecord: Decodable {
     static let columns = "id,place_id,name,area,discipline,grade_system,grade_value,about,is_verified,created_by"
     let id: String
     let place_id: String
