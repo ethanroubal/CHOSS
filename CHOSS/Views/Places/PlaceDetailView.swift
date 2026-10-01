@@ -52,6 +52,8 @@ struct PlaceDetailView: View {
                     // Always on show: crags get both podiums side by side; gyms get most climbs sent.
                     LeaderboardView(placeID: place.id, showsHardest: place.kind == .crag)
 
+                    PageCommentsSection(page: .place(place.id), title: place.name)
+
                     if place.kind == .crag {
                         Picker("Section", selection: $tab) {
                             ForEach(Tab.allCases) { Text($0.rawValue).tag($0) }
@@ -87,6 +89,7 @@ struct PlaceDetailView: View {
         // Pull down to load sends (and photos, climbs…) posted since the page opened.
         .refreshable {
             await store.load()
+            await store.loadComments(on: .place(placeID), force: true)
             if store.place(placeID)?.kind == .crag { await store.loadClimbs(at: placeID, force: true) }
         }
         // A crag's climbs come from the server when its page opens (there can be thousands).

@@ -73,3 +73,26 @@ select 'cover is most liked' as check, (select storage_path from community_photo
 select 'imported climbs' as check, count(*) as climbs, count(distinct place_id) as crags,
        count(*) filter (where grade_value is not null) as graded
   from climbs where created_by is null;
+
+-- Comments on a crag's page and a climb's page.
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
+insert into page_comments (place_id, author_id, body) select yosemite, alex, 'Valley is dry this week' from ids;
+insert into page_comments (climb_id, author_id, body)
+  select (select id from climbs where name = 'Midnight Lightning' and created_by is not null), alex, 'Bring two pads' from ids;
+do $$ begin
+  begin insert into page_comments (place_id, author_id, body)
+          select yosemite, sam, 'pretending to be Sam' from ids;
+        raise exception 'CHEAT WORKED: page comment as someone else';
+  exception when insufficient_privilege then raise notice 'ok: cannot comment as someone else'; end;
+  begin insert into page_comments (author_id, body) select alex, 'on no page' from ids;
+        raise exception 'BROKEN: page comment without a page';
+  exception when check_violation then raise notice 'ok: a page comment needs a page'; end;
+end $$;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
+delete from page_comments;   -- Sam can't delete Alex's comments (RLS: no rows match)
+select 'page comments after sam delete' as check, count(*) from page_comments;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
+delete from page_comments where climb_id is not null;
+select 'page comments after alex deletes one' as check, count(*) from page_comments;
+reset role;

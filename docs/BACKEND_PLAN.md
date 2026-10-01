@@ -32,6 +32,7 @@ row automatically, so screens never count rows at read time.
 | Community grade | `climb_grade_votes`, `climb_grades` | running totals of proposed grades per climb, so the average is instant |
 | Likes, reposts, follows (people and places), projects | one table each | one row per relationship, e.g. (post, user) |
 | Comments | `comments` | post, author, text |
+| Page comments | `page_comments` | a crag's / gym's or a climb's page (exactly one), author, text. Anyone can read; you add and delete only your own. |
 | Views | `posts.view_count` + `post_view_dedupe` | one view per viewer per post per day |
 | **Community photos** | `community_photos`, `photo_likes` + Storage `community-photos/<user>/…` | place or climb, uploader, file path, size. Counter: likes. |
 | Avatars | Storage `avatars/<user>/…` | |
@@ -103,6 +104,7 @@ full screen.
 | `supabase/migrations/20261001000100_grades.sql` | Every grade and its comparable rank (generated) |
 | `supabase/migrations/20261001000200_storage.sql` | Picture buckets and their upload / delete rules |
 | `supabase/migrations/20261001000400_climb_sources.sql` | Climbs' source id and location |
+| `supabase/migrations/20261001000500_page_comments.sql` | Comments on crag / gym / climb pages |
 | `supabase/seed.sql` | The 3,663 gyms and crags (generated) |
 | `supabase/seeds/climbs_*.sql` | The 205,546 outdoor climbs, each at its crag (generated) |
 | `supabase/config.toml` | Tells the CLI to run both seeds, in order |

@@ -366,6 +366,38 @@ final class SupabaseClimbingRepository: ClimbingRepository, @unchecked Sendable 
         _ = try? await client.storage.from("community-photos").remove(paths: [path])
     }
 
+    // MARK: - Page comments
+
+    func pageComments(on page: PhotoSubject) async throws -> PageComments? {
+        let (column, id) = page.columnAndID
+        let commentRows: [PageCommentRow] = try await client.from("page_comments").select(PageCommentRow.columns)
+            .eq(column, value: id).order("created_at", ascending: false).limit(500).execute().value  // newest 500
+        let authorIDs = Array(Set(commentRows.map(\.author_id)))
+        let profiles: [ProfileRow] = try await rows(in: "profiles", columns: ProfileRow.columns,
+                                                    key: "id", values: authorIDs)
+        return PageComments(
+            comments: commentRows.map(\.comment),
+            authors: profiles.map { row in
+                row.user(homePlaceIDs: [], projectClimbIDs: [],
+                         avatarURL: row.avatar_path.flatMap { publicURL(bucket: "avatars", path: $0) })
+            }
+        )
+    }
+
+    func addPageComment(_ comment: Comment, on page: PhotoSubject) async throws {
+        let (column, id) = page.columnAndID
+        try await client.from("page_comments").insert([
+            "id": comment.id, column: id, "author_id": comment.authorID, "body": comment.text,
+        ]).execute()
+    }
+
+    func deletePageComment(_ commentID: Comment.ID) async throws {
+        // The server only deletes your own; nothing comes back otherwise.
+        let deleted: [IDRow] = try await client.from("page_comments").delete()
+            .eq("id", value: commentID).select("id").execute().value
+        if deleted.isEmpty { throw RepositoryError.notAllowed }
+    }
+
     func setPhotoLike(photoID: CommunityPhoto.ID, liked: Bool, by userID: User.ID) async throws {
         if liked {
             try await client.from("photo_likes").insert(["photo_id": photoID, "user_id": userID]).execute()
@@ -648,6 +680,26 @@ private struct CommentRow: Decodable {
     let created_at: Date
 
     var comment: Comment { Comment(id: id, authorID: author_id, text: body, createdAt: created_at) }
+}
+
+private struct PageCommentRow: Decodable {
+    static let columns = "id,author_id,body,created_at"
+    let id: String
+    let author_id: String
+    let body: String
+    let created_at: Date
+
+    var comment: Comment { Comment(id: id, authorID: author_id, text: body, createdAt: created_at) }
+}
+
+private extension PhotoSubject {
+    /// The page_comments column for this page, and its id.
+    var columnAndID: (String, String) {
+        switch self {
+        case .place(let id): ("place_id", id)
+        case .climb(let id): ("climb_id", id)
+        }
+    }
 }
 
 private struct PhotoRow: Decodable {

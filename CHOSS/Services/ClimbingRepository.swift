@@ -62,9 +62,25 @@ protocol ClimbingRepository: Sendable {
     func climbs(at placeID: Place.ID) async throws -> [Climb]?
     /// Climbs at any crag whose name matches, best match first. nil: search the snapshot instead.
     func searchClimbs(_ query: String, limit: Int) async throws -> [Climb]?
+
+    /// Comments on a crag's / gym's or climb's page, oldest first, with any authors the app may
+    /// not have loaded yet. nil: no server (demo data keeps them in memory).
+    func pageComments(on page: PhotoSubject) async throws -> PageComments?
+    func addPageComment(_ comment: Comment, on page: PhotoSubject) async throws
+    /// Only the author may delete a comment; anyone else gets `RepositoryError.notAllowed`.
+    func deletePageComment(_ commentID: Comment.ID) async throws
+}
+
+/// A page's comments and the people who wrote them.
+struct PageComments {
+    var comments: [Comment]
+    var authors: [User]
 }
 
 extension ClimbingRepository {
     func climbs(at placeID: Place.ID) async throws -> [Climb]? { nil }
     func searchClimbs(_ query: String, limit: Int) async throws -> [Climb]? { nil }
+    func pageComments(on page: PhotoSubject) async throws -> PageComments? { nil }
+    func addPageComment(_ comment: Comment, on page: PhotoSubject) async throws {}
+    func deletePageComment(_ commentID: Comment.ID) async throws {}
 }

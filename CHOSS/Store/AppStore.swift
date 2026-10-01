@@ -38,6 +38,10 @@ final class AppStore {
     private(set) var reposts: [Repost] = []
     /// Pictures people added to places' and climbs' pages.
     private(set) var communityPhotos: [CommunityPhoto] = []
+    /// Comments on crag / gym / climb pages, oldest first. Loaded when a page opens.
+    private(set) var pageComments: [PhotoSubject: [Comment]] = [:]
+    private var pageCommentsLoaded: Set<PhotoSubject> = []
+    @ObservationIgnored private var pageCommentsLoading: Set<PhotoSubject> = []
 
     // MARK: Derived lookups
     // Kept in sync by `rebuildLookups()` (on load) and by each mutation, so reads are
@@ -450,6 +454,69 @@ final class AppStore {
 
     func isPhotoLiked(_ photoID: CommunityPhoto.ID) -> Bool {
         communityPhotos.first { $0.id == photoID }?.likedBy.contains(currentUserID) ?? false
+    }
+
+    // MARK: - Page comments (crags, gyms, climbs)
+
+    func comments(on page: PhotoSubject) -> [Comment] {
+        pageComments[page] ?? []
+    }
+
+    /// Whether a page's comments are still on their way.
+    func isLoadingComments(on page: PhotoSubject) -> Bool {
+        !pageCommentsLoaded.contains(page)
+    }
+
+    /// Fetches a page's comments (once; again with `force`, e.g. pull to refresh).
+    func loadComments(on page: PhotoSubject, force: Bool = false) async {
+        guard force || !pageCommentsLoaded.contains(page), !pageCommentsLoading.contains(page) else { return }
+        pageCommentsLoading.insert(page)
+        defer { pageCommentsLoading.remove(page) }
+        do {
+            if let loaded = try await repository.pageComments(on: page) {
+                // Authors the app hasn't met yet (keep fuller copies already loaded).
+                for author in loaded.authors where users[author.id] == nil { users[author.id] = author }
+                pageComments[page] = loaded.comments.sorted { $0.createdAt < $1.createdAt }
+            }
+        } catch {
+            lastError = error.localizedDescription  // pull to refresh tries again
+        }
+        pageCommentsLoaded.insert(page)
+    }
+
+    /// Posts a comment on a page. Shown at once; taken back off if the server refuses it.
+    func addComment(_ text: String, on page: PhotoSubject) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let comment = Comment(id: UUID().uuidString.lowercased(), authorID: currentUserID,
+                              // The server allows 2,000 characters (Unicode scalars).
+                              text: String(String.UnicodeScalarView(trimmed.unicodeScalars.prefix(2000))),
+                              createdAt: .now)
+        pageComments[page, default: []].append(comment)
+        Task {
+            do {
+                try await repository.addPageComment(comment, on: page)
+            } catch {
+                pageComments[page]?.removeAll { $0.id == comment.id }
+                lastError = error.localizedDescription
+            }
+        }
+    }
+
+    /// Only the author can delete a comment (checked here and again by the server).
+    func deleteComment(_ commentID: Comment.ID, on page: PhotoSubject) {
+        guard let index = pageComments[page]?.firstIndex(where: { $0.id == commentID }),
+              let comment = pageComments[page]?[index], comment.authorID == currentUserID
+        else { return }
+        pageComments[page]?.remove(at: index)
+        Task {
+            do {
+                try await repository.deletePageComment(commentID)
+            } catch {
+                pageComments[page, default: []].insert(comment, at: min(index, pageComments[page]?.count ?? 0))
+                lastError = error.localizedDescription
+            }
+        }
     }
 
     /// Saves the image and adds it to the subject's photos.

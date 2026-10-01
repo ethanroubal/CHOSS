@@ -98,6 +98,8 @@ struct ClimbDetailView: View {
                     .sensoryFeedback(.selection, trigger: store.isProject(climb.id))
                     .padding(.horizontal)
 
+                    PageCommentsSection(page: .climb(climb.id), title: climb.name)
+
                     videos(climb)
                     BrandFooter()
                 }
@@ -112,7 +114,10 @@ struct ClimbDetailView: View {
         }
         .defaultScrollAnchor(.top)
         // Pull down to load videos (and photos) posted since the page opened.
-        .refreshable { await store.load() }
+        .refreshable {
+            await store.load()
+            await store.loadComments(on: .climb(climbID), force: true)
+        }
     }
 
     private func header(_ climb: Climb) -> some View {
