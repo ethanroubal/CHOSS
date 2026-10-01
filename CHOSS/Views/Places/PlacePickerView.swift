@@ -200,14 +200,19 @@ struct HomePlacesPickerView: View {
                     .bold()
             }
         }
-        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
-                    prompt: "Search gyms and crags by name or town")
-        .autocorrectionDisabled()
+        // A search box in the page (not the navigation bar's), so the bar and its Done button
+        // stay visible while typing.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            InlineSearchField(prompt: "Search gyms and crags by name or town", text: $query)
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+                .background(.bar)
+        }
         .runSearch(query, version: store.searchIndexVersion, into: $search) { [store] text in
             await store.searchPlaceIDs(text)
         }
         .onChange(of: query) { pageLimit = Paging.pageSize }
-        .onSubmit(of: .search) {
+        .onSubmit {
             // Return adds the best match.
             let text = query
             guard !SearchResults.clean(text).isEmpty, !isFull else { return }
