@@ -19,6 +19,5 @@ alter table storage.objects enable row level security;
 create function storage.foldername(name text) returns text[] language sql immutable as $$
   select (string_to_array(name, '/'))[1:array_length(string_to_array(name, '/'), 1) - 1] $$;
 grant usage on schema public, storage to anon, authenticated;
--- Supabase gives these roles table privileges by default; RLS and column grants narrow them.
-alter default privileges in schema public grant all on tables to anon, authenticated;
-alter default privileges in schema public grant all on functions to anon, authenticated;
+-- Like newer Supabase projects: no automatic table access for anon / authenticated, so the
+-- migrations' own grants are what's tested.
