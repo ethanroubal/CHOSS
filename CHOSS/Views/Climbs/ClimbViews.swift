@@ -1,5 +1,42 @@
 import SwiftUI
 
+/// A climb's coordinates; tap to open them in Maps. "Location unknown" when the climb has no
+/// point of its own (only its crag's).
+struct ClimbLocationRow: View {
+    @Environment(\.openURL) private var openURL
+    let climb: Climb
+
+    var body: some View {
+        if let latitude = climb.latitude, let longitude = climb.longitude {
+            Button {
+                if let url = Self.mapsURL(latitude: latitude, longitude: longitude, name: climb.name) {
+                    openURL(url)
+                }
+            } label: {
+                Label(String(format: "%.5f, %.5f", latitude, longitude), systemImage: "mappin.and.ellipse")
+                    .font(.subheadline.monospacedDigit())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.tint)
+            .accessibilityHint("Opens the climb's location in Maps")
+        } else {
+            Label("Location unknown", systemImage: "mappin.slash")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    /// Apple Maps with a pin at the climb.
+    static func mapsURL(latitude: Double, longitude: Double, name: String) -> URL? {
+        var components = URLComponents(string: "https://maps.apple.com/")
+        components?.queryItems = [
+            URLQueryItem(name: "ll", value: "\(latitude),\(longitude)"),
+            URLQueryItem(name: "q", value: name),
+        ]
+        return components?.url
+    }
+}
+
 /// One climb in a list: name, area, grade, and how many videos (beta) it has.
 struct ClimbRow: View {
     @Environment(AppStore.self) private var store
@@ -147,6 +184,7 @@ struct ClimbDetailView: View {
             Text(climb.discipline.displayName)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+            ClimbLocationRow(climb: climb)
             if !climb.about.isEmpty {
                 Text(climb.about).font(.subheadline)
             }

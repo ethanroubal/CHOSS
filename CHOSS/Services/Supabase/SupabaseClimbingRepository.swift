@@ -471,7 +471,7 @@ private struct PlaceInsert: Encodable {
 }
 
 private struct ClimbRecord: Decodable {
-    static let columns = "id,place_id,name,area,discipline,grade_system,grade_value,about,is_verified,created_by"
+    static let columns = "id,place_id,name,area,discipline,grade_system,grade_value,about,is_verified,created_by,latitude,longitude"
     let id: String
     let place_id: String
     let name: String
@@ -482,12 +482,15 @@ private struct ClimbRecord: Decodable {
     let about: String
     let is_verified: Bool
     let created_by: String?
+    let latitude: Double?
+    let longitude: Double?
 
     var climb: Climb {
         var grade: Grade?
         if let grade_system, let grade_value { grade = Grade(system: grade_system, value: grade_value) }
         return Climb(id: id, placeID: place_id, name: name, area: area, discipline: discipline, grade: grade,
-                     about: about, source: .curated, isVerified: is_verified, createdBy: created_by)
+                     about: about, source: .curated, isVerified: is_verified, createdBy: created_by,
+                     latitude: latitude, longitude: longitude)
     }
 }
 

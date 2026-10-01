@@ -15,6 +15,9 @@ Climb ids are the OpenBeta climb uuid from the source URL (other sources: md5 of
 which is also kept as external_id), so
 re-running updates climbs in place and never duplicates them; posts stay attached.
 
+A climb keeps its own coordinates; if they're just the crag's point (same coordinates, or
+"Crag/area point" in Coordinate basis) its location is left empty, which the app shows as unknown.
+
 Grades are mapped onto the app's scales (CHOSS/Models/Grade.swift):
   YDS  5.10- -> 5.10a, 5.10 -> 5.10b, 5.10+ -> 5.10c, 5.10a/b -> 5.10a, 5.7+ -> 5.7,
        below 5.5 (and class 3 / 4) -> no grade
@@ -41,6 +44,8 @@ OUT_DIR = ROOT / "supabase" / "seeds"
 ROWS_PER_INSERT = 1000
 ROWS_PER_FILE = 25000
 NEAREST_CRAG_KM = 3.0
+# Coordinates this close to the crag's (about 1 m) are the crag's point, not the climb's.
+SAME_POINT_DEGREES = 0.00001
 
 V_GRADES = ["VB"] + [f"V{i}" for i in range(18)]
 YDS_GRADES = [f"5.{i}" for i in range(5, 10)] + [f"5.{n}{l}" for n in range(10, 16) for l in "abcd"]
@@ -184,7 +189,8 @@ INSERT_HEAD = (
     "insert into public.climbs (id, external_id, place_id, name, discipline, grade_system, grade_value,\n"
     "                           about, latitude, longitude, is_verified)\n"
     "select v.id::uuid, v.external_id, p.id, v.name, v.discipline::public.discipline,\n"
-    "       v.grade_system::public.grade_system, v.grade_value, v.about, v.latitude, v.longitude, true\n"
+    "       v.grade_system::public.grade_system, v.grade_value, v.about,\n"
+    "       v.latitude::double precision, v.longitude::double precision, true\n"
     "  from (values\n"
 )
 INSERT_TAIL = (
@@ -236,7 +242,7 @@ def main():
     col = {key: header.index(name) for key, name in (
         ("name", "climb"), ("grade", "difficulty grade"), ("lat", "latitude"), ("lon", "longitude"),
         ("area", "climbing area"), ("state", "state(s)"), ("type", "climbing type"),
-        ("url", "source url"), ("notes", "notes"),
+        ("url", "source url"), ("notes", "notes"), ("basis", "coordinate basis"),
     )}
 
     climbs, seen = [], set()
@@ -277,6 +283,14 @@ def main():
         if grade is None:
             ungraded[str(raw_grade)] += 1
         notes = str(row[col["notes"]] or "")
+        # A climb only gets a location if it has its own: a point that is just the crag's
+        # (the crag's coordinates, or marked as an area point) means "unknown".
+        if lat is not None and (
+            str(row[col["basis"]] or "").lower().startswith("crag/area")
+            or (abs(lat - crag["latitude"]) < SAME_POINT_DEGREES and abs(lon - crag["longitude"]) < SAME_POINT_DEGREES)
+        ):
+            lat = lon = None
+            report["location unknown (crag's point)"] += 1
         climbs.append({
             "id": cid,
             # OpenBeta climbs are identified by their id; keep other sources' URL.

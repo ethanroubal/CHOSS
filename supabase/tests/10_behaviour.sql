@@ -71,7 +71,8 @@ select 'cover is most liked' as check, (select storage_path from community_photo
 
 -- The imported outdoor climbs (supabase/seeds) all landed at their crags.
 select 'imported climbs' as check, count(*) as climbs, count(distinct place_id) as crags,
-       count(*) filter (where grade_value is not null) as graded
+       count(*) filter (where grade_value is not null) as graded,
+       count(*) filter (where latitude is not null) as located
   from climbs where created_by is null;
 
 -- Comments on a crag's page and a climb's page.

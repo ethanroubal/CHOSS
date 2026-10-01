@@ -20,4 +20,7 @@ struct Climb: Identifiable, Codable, Hashable {
     var externalID: String? = nil
     var isVerified: Bool = true
     var createdBy: User.ID? = nil
+    /// The climb's own location. nil when unknown (the source only had the crag's point).
+    var latitude: Double? = nil
+    var longitude: Double? = nil
 }
