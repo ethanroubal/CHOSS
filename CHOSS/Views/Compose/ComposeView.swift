@@ -15,6 +15,9 @@ struct ComposeView: View {
     @State private var isPosting = false
     @State private var errorMessage: String?
     @State private var previewPlayer: AVPlayer?
+    /// The part of the video to post (nil: all of it). The cut is made when you share.
+    @State private var trim: VideoTrim?
+    @State private var isTrimming = false
     @FocusState private var isEditingText: Bool
     /// The picked climb is new (nobody has posted it), so discipline and style are up to you.
     @State private var routeIsNew = false
@@ -104,7 +107,20 @@ struct ComposeView: View {
                 }
             }
             .onChange(of: draft.videoURL) { _, url in
+                trim = nil
                 previewPlayer = url.map(AVPlayer.init(url:))
+            }
+            .onChange(of: trim) { _, trim in
+                // The preview plays only the part that will be posted.
+                guard let item = previewPlayer?.currentItem else { return }
+                item.forwardPlaybackEndTime = trim.map { CMTime(seconds: $0.end, preferredTimescale: 600) } ?? .invalid
+                previewPlayer?.seek(to: CMTime(seconds: trim?.start ?? 0, preferredTimescale: 600),
+                                    toleranceBefore: .zero, toleranceAfter: .zero)
+            }
+            .fullScreenCover(isPresented: $isTrimming) {
+                if let url = draft.videoURL {
+                    VideoTrimmerView(url: url, initial: trim) { trim = $0 }
+                }
             }
             .fullScreenCover(isPresented: $isRecording) {
                 VideoRecorder { url in
@@ -136,6 +152,20 @@ struct ComposeView: View {
                 HStack {
                     ProgressView()
                     Text("Loading video…").foregroundStyle(.secondary)
+                }
+            }
+
+            if draft.videoURL != nil {
+                Button {
+                    previewPlayer?.pause()
+                    isTrimming = true
+                } label: {
+                    LabeledContent {
+                        Text(trim?.label ?? "Full length")
+                            .monospacedDigit()
+                    } label: {
+                        Label("Trim", systemImage: "scissors")
+                    }
                 }
             }
 
@@ -402,7 +432,18 @@ struct ComposeView: View {
     private func share() {
         isPosting = true
         Task {
-            let success = await store.createPost(from: draft)
+            var toPost = draft
+            if let trim, let source = draft.videoURL {
+                // Cut the video to the chosen part first; only that is uploaded.
+                do {
+                    toPost.videoURL = try await VideoTrimExporter.export(source, trim: trim)
+                } catch {
+                    isPosting = false
+                    errorMessage = error.localizedDescription
+                    return
+                }
+            }
+            let success = await store.createPost(from: toPost)
             isPosting = false
             if success {
                 dismiss()
