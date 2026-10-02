@@ -40,6 +40,8 @@ final class AppOpenAdManager: NSObject {
             print("[Ads] No app-open ad unit id in Info.plist (CHOSSAppOpenAdUnitID); no launch ad.")
             return
         }
+        let appID = Bundle.main.object(forInfoDictionaryKey: "GADApplicationIdentifier") as? String
+        print("[Ads] App id: \(appID ?? "missing"), app-open unit: \(unitID)")
         MobileAds.shared.start(completionHandler: nil)
         loadTask = Task {
             do {
@@ -47,7 +49,9 @@ final class AppOpenAdManager: NSObject {
                 print("[Ads] Launch ad loaded.")
                 return ad
             } catch {
-                print("[Ads] Launch ad failed to load: \(error.localizedDescription)")
+                let details = error as NSError
+                print("[Ads] Launch ad failed to load: \(details.localizedDescription) "
+                      + "(\(details.domain) \(details.code)) \(details.userInfo)")
                 return nil
             }
         }
@@ -92,10 +96,19 @@ final class AppOpenAdManager: NSObject {
     }
 
     #if canImport(GoogleMobileAds)
+    /// Google's published test unit for app-open ads (always fills, earns nothing).
+    private static let testAdUnitID = "ca-app-pub-3940256099942544/5575463023"
+
     private static var adUnitID: String? {
-        let id = Bundle.main.object(forInfoDictionaryKey: "CHOSSAppOpenAdUnitID") as? String
+        #if DEBUG
+        // Debug builds always use Google's test unit, straight from code.
+        return testAdUnitID
+        #else
+        let raw = Bundle.main.object(forInfoDictionaryKey: "CHOSSAppOpenAdUnitID") as? String
+        let id = raw?.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let id, !id.isEmpty, !id.hasPrefix("$(") else { return nil }
         return id
+        #endif
     }
     #endif
 
