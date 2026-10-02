@@ -25,6 +25,7 @@ struct HomeView: View {
                     LazyVStack(spacing: 12) {
                         ForEach(Array(feed.enumerated()), id: \.element.id) { index, item in
                             PostCardView(post: item.post, reason: item.reason)
+                                .onAppear { FeedAds.postAppeared(at: index) }
                             Divider()
                             // A sponsored post after every few posts (not after the last one).
                             if (index + 1) % FeedAds.interval == 0, index < feed.count - 1 {
@@ -36,6 +37,7 @@ struct HomeView: View {
                 }
             }
             .refreshable { await store.load() }
+            .onAppear { FeedAds.feedAppeared() }
             // No text title: the wordmark is the header (pushed screens' back button says "Back").
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)

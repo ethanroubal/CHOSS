@@ -15,8 +15,12 @@ enum FeedAds {
 }
 
 #if canImport(GoogleMobileAds)
-/// Loads native ads a few at a time and hands each feed slot its own ad, kept for the session so
+/// Loads native ads ahead of time and hands each feed slot its own ad, kept for the session so
 /// scrolling back shows the same one.
+///
+/// Ads are loaded before they're needed (when the feed opens, then topping up), and a slot gets
+/// its ad a few posts before you reach it. A slot that reaches the screen without an ad stays
+/// empty for the session: an ad never pops in under your finger and shifts the feed.
 @MainActor
 @Observable
 final class FeedAdStore: NSObject {
@@ -24,10 +28,16 @@ final class FeedAdStore: NSObject {
 
     /// slot number → its ad.
     private(set) var adsBySlot: [Int: NativeAd] = [:]
+    /// Loaded ads not given to a slot yet.
     @ObservationIgnored private var spare: [NativeAd] = []
-    @ObservationIgnored private var waitingSlots: [Int] = []
+    /// Slots coming up that still need an ad (given one as soon as it loads).
+    @ObservationIgnored private var pendingSlots: [Int] = []
+    /// Slots that reached the screen without an ad: left empty.
+    @ObservationIgnored private var skippedSlots: Set<Int> = []
     @ObservationIgnored private var loader: AdLoader?
     @ObservationIgnored private var failures = 0
+    /// Ads kept loaded and ready.
+    private let spareTarget = 2
 
     /// Google's published test unit for native ads.
     private static let testAdUnitID = "ca-app-pub-3940256099942544/3986624511"
@@ -45,20 +55,34 @@ final class FeedAdStore: NSObject {
 
     func ad(forSlot slot: Int) -> NativeAd? { adsBySlot[slot] }
 
-    /// A slot came into view: give it an ad (now if one is spare, else when the next loads).
-    func request(slot: Int) {
-        guard adsBySlot[slot] == nil, !waitingSlots.contains(slot) else { return }
+    /// Starts loading ads so the first slots have one ready (call when the feed opens).
+    func preload() {
+        loadMoreIfNeeded()
+    }
+
+    /// The feed is a few posts away from this slot: give it an ad now if one is ready, otherwise
+    /// as soon as one loads (while it's still off screen).
+    func prepare(slot: Int) {
+        guard adsBySlot[slot] == nil, !skippedSlots.contains(slot), !pendingSlots.contains(slot) else { return }
         if !spare.isEmpty {
             adsBySlot[slot] = spare.removeFirst()
         } else {
-            waitingSlots.append(slot)
+            pendingSlots.append(slot)
+            pendingSlots.sort()
         }
         loadMoreIfNeeded()
     }
 
+    /// The slot has scrolled onto the screen. Without an ad by now, it stays empty.
+    func slotReachedScreen(_ slot: Int) {
+        guard adsBySlot[slot] == nil else { return }
+        skippedSlots.insert(slot)
+        pendingSlots.removeAll { $0 == slot }
+    }
+
     private func loadMoreIfNeeded() {
-        // Keep one spare ready; stop retrying after a few failures (ad blocker, no fill…).
-        guard loader == nil, !waitingSlots.isEmpty || spare.isEmpty, failures < 3,
+        // Keep a couple of ads ready; stop retrying after a few failures (ad blocker, no fill…).
+        guard loader == nil, spare.count < spareTarget || !pendingSlots.isEmpty, failures < 3,
               let unitID = Self.adUnitID else { return }
         let options = MultipleAdsAdLoaderOptions()
         options.numberOfAds = 3
@@ -70,8 +94,8 @@ final class FeedAdStore: NSObject {
 
     private func received(_ ad: NativeAd) {
         failures = 0
-        if !waitingSlots.isEmpty {
-            adsBySlot[waitingSlots.removeFirst()] = ad
+        if !pendingSlots.isEmpty {
+            adsBySlot[pendingSlots.removeFirst()] = ad
         } else {
             spare.append(ad)
         }
@@ -79,14 +103,14 @@ final class FeedAdStore: NSObject {
 
     private func finished() {
         loader = nil
-        if !waitingSlots.isEmpty { loadMoreIfNeeded() }
+        loadMoreIfNeeded()
     }
 
     private func failed(_ error: Error) {
         failures += 1
         print("[Ads] Feed ad failed to load: \(error.localizedDescription)")
         loader = nil
-        if !waitingSlots.isEmpty { loadMoreIfNeeded() }
+        loadMoreIfNeeded()
     }
 }
 
@@ -105,7 +129,8 @@ extension FeedAdStore: NativeAdLoaderDelegate {
 }
 #endif
 
-/// A sponsored post in the feed, followed by a divider. Empty until (unless) its ad loads.
+/// A sponsored post in the feed, followed by a divider. Its ad is usually ready before it's
+/// reached (see `FeedAdStore`); if not, the slot takes no space.
 struct FeedAdSlot: View {
     /// 0 for the first ad in the feed, 1 for the second…
     let slot: Int
@@ -122,9 +147,37 @@ struct FeedAdSlot: View {
                 Color.clear.frame(height: 0)
             }
         }
-        .onAppear { FeedAdStore.shared.request(slot: slot) }
+        // The lazy feed builds rows a little ahead of the screen: ask for an ad then too.
+        .onAppear { FeedAdStore.shared.prepare(slot: slot) }
+        // Once its top is on screen, it keeps whatever it has (no late pop-in).
+        .onGeometryChange(for: Bool.self) { proxy in
+            proxy.frame(in: .global).minY < UIScreen.main.bounds.maxY
+        } action: { onScreen in
+            if onScreen { FeedAdStore.shared.slotReachedScreen(slot) }
+        }
         #else
         EmptyView()
+        #endif
+    }
+}
+
+/// Feed hooks for loading ads early: when the feed opens, and a few posts before each slot.
+extension FeedAds {
+    /// How many posts ahead of a slot its ad is requested.
+    static let lookahead = 3
+
+    @MainActor static func feedAppeared() {
+        #if canImport(GoogleMobileAds)
+        FeedAdStore.shared.preload()
+        #endif
+    }
+
+    /// Call when the post at `index` appears.
+    @MainActor static func postAppeared(at index: Int) {
+        #if canImport(GoogleMobileAds)
+        // The next slot comes after post number (slot + 1) * interval.
+        let nextSlot = (index + lookahead) / interval - 1
+        if nextSlot >= 0 { FeedAdStore.shared.prepare(slot: nextSlot) }
         #endif
     }
 }
