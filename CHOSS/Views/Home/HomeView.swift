@@ -23,9 +23,13 @@ struct HomeView: View {
                     .padding(.top, 60)
                 } else {
                     LazyVStack(spacing: 12) {
-                        ForEach(feed) { item in
+                        ForEach(Array(feed.enumerated()), id: \.element.id) { index, item in
                             PostCardView(post: item.post, reason: item.reason)
                             Divider()
+                            // A sponsored post after every few posts (not after the last one).
+                            if (index + 1) % FeedAds.interval == 0, index < feed.count - 1 {
+                                FeedAdSlot(slot: (index + 1) / FeedAds.interval - 1)
+                            }
                         }
                     }
                     BrandFooter(message: "You're all caught up")

@@ -12,6 +12,8 @@
 	<string>$(ADMOB_APP_ID)</string>
 	<key>CHOSSAppOpenAdUnitID</key>
 	<string>$(ADMOB_APP_OPEN_AD_UNIT_ID)</string>
+	<key>CHOSSFeedNativeAdUnitID</key>
+	<string>$(ADMOB_FEED_NATIVE_AD_UNIT_ID)</string>
 	<key>SKAdNetworkItems</key>
 	<array>
 		<dict>
