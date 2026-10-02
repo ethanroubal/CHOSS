@@ -208,6 +208,11 @@ final class SupabaseSession {
         if message.localizedCaseInsensitiveContains("email not confirmed") {
             return "Confirm your email first: check your inbox for the link."
         }
+        // Supabase limits how many emails it sends (per address and for the whole project).
+        if message.localizedCaseInsensitiveContains("rate limit")
+            || message.localizedCaseInsensitiveContains("only request this after") {
+            return "Too many emails sent recently. Wait a few minutes, then try again."
+        }
         return message
     }
 }
