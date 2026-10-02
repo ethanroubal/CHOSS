@@ -374,18 +374,32 @@ struct SendVideoPlayer: View {
             .accessibilityLabel("Open video full screen")
             .overlay(alignment: .bottomTrailing) {
                 if post.videoURL != nil {
-                    Button {
-                        isMuted.toggle()
-                    } label: {
-                        Image(systemName: isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                            .font(.footnote.bold())
-                            .foregroundStyle(.white)
-                            .frame(width: 30, height: 30)
-                            .background(.black.opacity(0.55), in: Circle())
+                    HStack(spacing: 8) {
+                        // Pause / play here (a tap on the video opens feed mode).
+                        Button {
+                            withAnimation(.easeOut(duration: 0.15)) { isPausedByUser.toggle() }
+                            updatePlayback()
+                        } label: {
+                            Image(systemName: isPausedByUser ? "play.fill" : "pause.fill")
+                                .font(.footnote.bold())
+                                .foregroundStyle(.white)
+                                .frame(width: 30, height: 30)
+                                .background(.black.opacity(0.55), in: Circle())
+                        }
+                        .accessibilityLabel(isPausedByUser ? "Play" : "Pause")
+                        Button {
+                            isMuted.toggle()
+                        } label: {
+                            Image(systemName: isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                                .font(.footnote.bold())
+                                .foregroundStyle(.white)
+                                .frame(width: 30, height: 30)
+                                .background(.black.opacity(0.55), in: Circle())
+                        }
+                        .accessibilityLabel(isMuted ? "Unmute" : "Mute")
                     }
                     .padding(.trailing, 10)
                     .padding(.bottom, 30)  // above the timeline
-                    .accessibilityLabel(isMuted ? "Unmute" : "Mute")
                 }
             }
             .overlay(alignment: .bottom) {

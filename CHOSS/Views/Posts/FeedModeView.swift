@@ -31,7 +31,8 @@ extension EnvironmentValues {
 /// returns to where you were.
 ///
 /// Opened from the home feed it has two tabs at the top: Following (the home feed, the default)
-/// and Recents (the latest posts from everyone). Each tab remembers where you were in it.
+/// and Recents (the latest posts from everyone): swipe sideways or tap to switch. Each tab
+/// remembers where you were in it.
 struct FeedModeView: View {
     @Environment(AppStore.self) private var store
     @Environment(\.dismiss) private var dismiss
@@ -46,8 +47,6 @@ struct FeedModeView: View {
     }
 
     @State private var tab: Tab = .following
-    /// Where each tab was (page id), so switching back returns to the same video.
-    @State private var positions: [Tab: String] = [:]
     @State private var isAppeared = false
     @State private var focusID = UUID()
 
@@ -64,23 +63,24 @@ struct FeedModeView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                switch showsHomeTabs ? tab : .following {
-                case .following:
-                    FeedModePager(postIDs: postIDs,
-                                  startPageID: positions[.following] ?? FeedModePage.post(startID).id,
-                                  isActive: isAppeared) { positions[.following] = $0 }
-                        .id(Tab.following)
-                case .recents:
-                    let ids = recentIDs
-                    if let first = ids.first {
-                        FeedModePager(postIDs: ids,
-                                      startPageID: positions[.recents] ?? FeedModePage.post(first).id,
-                                      isActive: isAppeared) { positions[.recents] = $0 }
-                            .id(Tab.recents)
-                    } else {
-                        ContentUnavailableView("No videos yet", systemImage: "video.slash")
+            GeometryReader { geometry in
+                let insets = geometry.safeAreaInsets
+                if showsHomeTabs {
+                    // Swipe sideways between Following and Recents (or tap them at the top).
+                    // Each tab keeps its own place; only the one on screen plays.
+                    TabView(selection: $tab) {
+                        FeedModePager(postIDs: postIDs, startPageID: FeedModePage.post(startID).id,
+                                      isActive: isAppeared && tab == .following, insets: insets) { _ in }
+                            .tag(Tab.following)
+                        recentsPage(insets: insets)
+                            .tag(Tab.recents)
                     }
+                    .tabViewStyle(.page(indexDisplayMode: .never))
+                    .ignoresSafeArea()
+                } else {
+                    FeedModePager(postIDs: postIDs, startPageID: FeedModePage.post(startID).id,
+                                  isActive: isAppeared, insets: insets) { _ in }
+                        .ignoresSafeArea()
                 }
             }
             .background(Color.black)
@@ -115,6 +115,17 @@ struct FeedModeView: View {
             .withAppRoutes()
         }
         .environment(\.colorScheme, .dark)
+    }
+
+    @ViewBuilder
+    private func recentsPage(insets: EdgeInsets) -> some View {
+        let ids = recentIDs
+        if let first = ids.first {
+            FeedModePager(postIDs: ids, startPageID: FeedModePage.post(first).id,
+                          isActive: isAppeared && tab == .recents, insets: insets) { _ in }
+        } else {
+            ContentUnavailableView("No videos yet", systemImage: "video.slash")
+        }
     }
 
     /// "Following   Recents" at the top, the selected one bold and underlined.
@@ -164,7 +175,9 @@ private struct FeedModePager: View {
     let startPageID: String
     /// False while something is pushed over feed mode (nothing plays then).
     let isActive: Bool
-    /// Reports the page on screen, so the tab can come back to it.
+    /// The screen's safe-area insets (for the overlays), when the pager is laid out edge to edge.
+    var insets: EdgeInsets? = nil
+    /// Reports the page on screen.
     let onPageChange: (String) -> Void
 
     @State private var currentID: String?
@@ -189,7 +202,7 @@ private struct FeedModePager: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let insets = geometry.safeAreaInsets
+            let insets = self.insets ?? geometry.safeAreaInsets
             ScrollViewReader { proxy in
                 ScrollView(.vertical) {
                     LazyVStack(spacing: 0) {
