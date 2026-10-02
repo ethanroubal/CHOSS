@@ -97,6 +97,7 @@ struct ProfileView: View {
     private func header(_ user: User) -> some View {
         HStack(spacing: 16) {
             AvatarView(user: user, size: 84)
+                .enlargesAvatarOnTap(user)
             StatView(value: store.postCount(by: user.id), label: "Sends")
             // Tap a count to see (and search) the list.
             statLink(user, .followers, value: store.followerCount(ofUser: user.id))
