@@ -377,10 +377,10 @@ final class AppStore {
     private let viewRepeatInterval: TimeInterval = 10
 
     /// Logs a view: called when a video has actually been on screen (see `SendVideoPlayer`).
-    /// Grids of thumbnails never call this. Your own views of your own videos don't count.
+    /// Grids of thumbnails never call this. Watching your own video counts too.
     func recordView(_ postID: Post.ID) {
         let me = currentUserID
-        guard let index = postPosition(postID), posts[index].authorID != me,
+        guard let index = postPosition(postID),
               lastViewed[postID].map({ Date.now.timeIntervalSince($0) >= viewRepeatInterval }) ?? true
         else { return }
         lastViewed[postID] = .now

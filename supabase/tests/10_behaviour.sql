@@ -118,3 +118,9 @@ select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b
 select 'rewatch counts' as check, record_view(id) as views from posts where caption = 'sent!';
 select 'immediate rewatch ignored' as check, record_view(id) as views from posts where caption = 'sent!';
 reset role;
+
+-- Watching your own video counts too.
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
+select 'own view counts' as check, record_view(id) as views from posts where caption = 'sent!';
+reset role;
