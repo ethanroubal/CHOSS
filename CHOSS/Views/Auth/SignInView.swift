@@ -2,7 +2,8 @@
 import SwiftUI
 import AuthenticationServices
 
-/// First screen when signed out: Sign in with Apple, Google, or email and password.
+/// First screen when signed out: email and password (Apple / Google buttons are switched off
+/// for now, see `showsSocialSignIn`).
 struct SignInView: View {
     @Bindable var session: SupabaseSession
     @Environment(\.colorScheme) private var colorScheme
@@ -32,28 +33,32 @@ struct SignInView: View {
                 }
                 .padding(.top, 48)
 
-                SignInWithAppleButton(mode == .signIn ? .signIn : .signUp) { request in
-                    let made = session.makeNonce()
-                    nonce = made.raw
-                    request.requestedScopes = [.email, .fullName]
-                    request.nonce = made.hashed
-                } onCompletion: { result in
-                    handleApple(result)
-                }
-                .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
-                .frame(height: 50)
+                // Apple and Google sign-in are switched off for now (email only); flip
+                // `showsSocialSignIn` to bring them back once they're set up on the server.
+                if Self.showsSocialSignIn {
+                    SignInWithAppleButton(mode == .signIn ? .signIn : .signUp) { request in
+                        let made = session.makeNonce()
+                        nonce = made.raw
+                        request.requestedScopes = [.email, .fullName]
+                        request.nonce = made.hashed
+                    } onCompletion: { result in
+                        handleApple(result)
+                    }
+                    .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
+                    .frame(height: 50)
 
-                GoogleSignInButton(title: mode == .signIn ? "Sign in with Google" : "Sign up with Google") {
-                    focused = false
-                    notice = nil
-                    Task { await session.signInWithGoogle() }
-                }
-                .disabled(session.isWorking)
+                    GoogleSignInButton(title: mode == .signIn ? "Sign in with Google" : "Sign up with Google") {
+                        focused = false
+                        notice = nil
+                        Task { await session.signInWithGoogle() }
+                    }
+                    .disabled(session.isWorking)
 
-                HStack {
-                    Rectangle().frame(height: 1).foregroundStyle(.quaternary)
-                    Text("or").font(.footnote).foregroundStyle(.secondary)
-                    Rectangle().frame(height: 1).foregroundStyle(.quaternary)
+                    HStack {
+                        Rectangle().frame(height: 1).foregroundStyle(.quaternary)
+                        Text("or").font(.footnote).foregroundStyle(.secondary)
+                        Rectangle().frame(height: 1).foregroundStyle(.quaternary)
+                    }
                 }
 
                 VStack(spacing: 12) {
@@ -134,6 +139,9 @@ struct SignInView: View {
             notice = nil
         }
     }
+
+    /// Show Sign in with Apple / Google (off until they're configured in Supabase).
+    private static let showsSocialSignIn = false
 
     /// Supabase's default minimum password length.
     private let minimumPassword = 6
