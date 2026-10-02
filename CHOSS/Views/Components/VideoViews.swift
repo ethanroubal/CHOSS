@@ -360,6 +360,7 @@ struct SendVideoPlayer: View {
                                     onDoubleTap: onDoubleTap) { seconds in
                     // Carry on inline from where full screen left off.
                     resumeAt = seconds
+                    store.setPlaybackPosition(seconds, of: post.id)
                     playback.seek(to: seconds)
                 }
             }
@@ -378,12 +379,19 @@ struct SendVideoPlayer: View {
             }
             .onChange(of: isMuted) { _, muted in playback.player.isMuted = muted }
             .onChange(of: scenePhase) { _, _ in updatePlayback() }
+            // Leaving the screen (scrolled away, covered, full screen…) remembers where the video
+            // was, so coming back carries on from there.
+            .onChange(of: isViewable) { _, viewable in
+                if !viewable { rememberPosition() }
+            }
             // A view counts once the video has really been on screen (mostly visible, app in the
             // foreground, not covered) for a moment, so scrolling straight past doesn't count.
+            // Coming back to a video you'd left partway through carries on the same view.
             .task(id: isViewable) {
                 guard isViewable else { return }
+                let isResuming = resumeAt != nil || store.playbackPosition(of: post.id) != nil
                 try? await Task.sleep(for: .seconds(1))
-                if !Task.isCancelled && isViewable { store.recordView(post.id) }
+                if !Task.isCancelled && isViewable && !isResuming { store.recordView(post.id) }
             }
             .onAppear {
                 isAppeared = true
@@ -391,6 +399,7 @@ struct SendVideoPlayer: View {
             }
             .onDisappear {
                 isAppeared = false
+                rememberPosition()
                 playback.unload()
             }
     }
@@ -400,10 +409,17 @@ struct SendVideoPlayer: View {
         isOnScreen && isAppeared && !isFullScreen && scenePhase == .active
     }
 
+    /// Saves where the video is (if it has started playing) for when it comes back on screen.
+    private func rememberPosition() {
+        guard playback.isReady else { return }
+        store.setPlaybackPosition(playback.currentSeconds, of: post.id)
+    }
+
     private func updatePlayback() {
         guard let url = post.videoURL else { return }
         if isOnScreen && isAppeared && !isFullScreen && !playback.isScrubbing && scenePhase == .active {
-            playback.load(url, startAt: resumeAt)  // no-op (keeps position) if already loaded
+            // No-op (keeps position) if already loaded; otherwise carries on where it was left.
+            playback.load(url, startAt: resumeAt ?? store.playbackPosition(of: post.id))
             resumeAt = nil
             playback.player.isMuted = isMuted
             if isPausedByUser { playback.pause() } else { playback.play() }
@@ -545,6 +561,8 @@ struct FullScreenVideoView: View {
         }
         .onChange(of: isMuted) { _, muted in playback.player.isMuted = muted }
         .task {
+            // Opened partway through (carrying on from the feed): the same view continues.
+            guard startAt < 0.5 else { return }
             try? await Task.sleep(for: .seconds(1))
             if !Task.isCancelled { store.recordView(post.id) }
         }

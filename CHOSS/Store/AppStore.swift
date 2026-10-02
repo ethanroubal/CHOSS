@@ -374,6 +374,17 @@ final class AppStore {
     /// full screen…), but not twice within `viewRepeatInterval`, e.g. going straight from the
     /// feed into full screen. The server applies the same rule.
     @ObservationIgnored private var lastViewed: [Post.ID: Date] = [:]
+    /// Where each video was when it was scrolled away (or covered), so coming back to it carries
+    /// on from there. Kept for the session.
+    @ObservationIgnored private var playbackPositions: [Post.ID: Double] = [:]
+
+    /// Where to carry on a video from, if it was left partway through.
+    func playbackPosition(of postID: Post.ID) -> Double? { playbackPositions[postID] }
+
+    /// Remembers where a video got to (nil or near the start: start over next time).
+    func setPlaybackPosition(_ seconds: Double?, of postID: Post.ID) {
+        playbackPositions[postID] = seconds.flatMap { $0 > 0.5 ? $0 : nil }
+    }
     private let viewRepeatInterval: TimeInterval = 10
 
     /// Logs a view: called when a video has actually been on screen (see `SendVideoPlayer`).
