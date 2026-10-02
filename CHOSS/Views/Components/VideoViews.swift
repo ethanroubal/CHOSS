@@ -329,6 +329,8 @@ struct SendVideoPlayer: View {
     @State private var resumeAt: Double?
     /// The list this video is in, for feed mode to carry on through.
     @Environment(\.videoFeedPostIDs) private var feedPostIDs
+    /// From the home feed: feed mode gets the Following / Recents tabs.
+    @Environment(\.videoFeedShowsHomeTabs) private var showsHomeTabs
     @Environment(\.scenePhase) private var scenePhase
 
     /// 4:5 at full width, but never more than about half the screen's height.
@@ -404,7 +406,8 @@ struct SendVideoPlayer: View {
                 }
                 updatePlayback()
             }) {
-                FeedModeView(postIDs: feedPostIDs ?? [post.id], startID: post.id)
+                FeedModeView(postIDs: feedPostIDs ?? [post.id], startID: post.id,
+                             showsHomeTabs: showsHomeTabs)
             }
             .onChange(of: isFullScreen) { _, _ in
                 reportFocus()

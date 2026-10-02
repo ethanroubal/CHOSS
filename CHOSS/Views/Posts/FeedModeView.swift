@@ -13,46 +13,170 @@ extension EnvironmentValues {
     }
 }
 
+/// Whether videos here open feed mode with the home feed's Following / Recents tabs.
+private struct VideoFeedShowsHomeTabsKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var videoFeedShowsHomeTabs: Bool {
+        get { self[VideoFeedShowsHomeTabsKey.self] }
+        set { self[VideoFeedShowsHomeTabsKey.self] = newValue }
+    }
+}
+
 /// "Feed mode", like Instagram Reels: each video fills the screen, with who posted it, the
 /// climb and caption along the bottom and like / comment / repost / sound down the right. Swipe
 /// up for the next video; every few videos there's a sponsored page. The back arrow (top left)
 /// returns to where you were.
+///
+/// Opened from the home feed it has two tabs at the top: Following (the home feed, the default)
+/// and Recents (the latest posts from everyone). Each tab remembers where you were in it.
 struct FeedModeView: View {
     @Environment(AppStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     let postIDs: [Post.ID]
     let startID: Post.ID
+    var showsHomeTabs = false
+
+    enum Tab: String, CaseIterable, Identifiable {
+        case following = "Following"
+        case recents = "Recents"
+        var id: Self { self }
+    }
+
+    @State private var tab: Tab = .following
+    /// Where each tab was (page id), so switching back returns to the same video.
+    @State private var positions: [Tab: String] = [:]
+    @State private var isAppeared = false
+    @State private var focusID = UUID()
+
+    init(postIDs: [Post.ID], startID: Post.ID, showsHomeTabs: Bool = false) {
+        self.postIDs = postIDs.contains(startID) ? postIDs : [startID]
+        self.startID = startID
+        self.showsHomeTabs = showsHomeTabs
+    }
+
+    /// The latest posts from everyone, newest first (only ones with a video).
+    private var recentIDs: [Post.ID] {
+        Array(store.posts.lazy.filter { $0.videoURL != nil }.prefix(200).map(\.id))
+    }
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                switch showsHomeTabs ? tab : .following {
+                case .following:
+                    FeedModePager(postIDs: postIDs,
+                                  startPageID: positions[.following] ?? FeedModePage.post(startID).id,
+                                  isActive: isAppeared) { positions[.following] = $0 }
+                        .id(Tab.following)
+                case .recents:
+                    let ids = recentIDs
+                    if let first = ids.first {
+                        FeedModePager(postIDs: ids,
+                                      startPageID: positions[.recents] ?? FeedModePage.post(first).id,
+                                      isActive: isAppeared) { positions[.recents] = $0 }
+                            .id(Tab.recents)
+                    } else {
+                        ContentUnavailableView("No videos yet", systemImage: "video.slash")
+                    }
+                }
+            }
+            .background(Color.black)
+            .overlay(alignment: .top) {
+                ZStack {
+                    if showsHomeTabs { tabPicker }
+                    HStack {
+                        Button {
+                            dismiss()
+                        } label: {
+                            Image(systemName: "chevron.left")
+                                .font(.title3.bold())
+                                .foregroundStyle(.white)
+                                .frame(width: 44, height: 44)
+                                .shadow(color: .black.opacity(0.5), radius: 4)
+                        }
+                        .padding(.leading, 8)
+                        .accessibilityLabel("Back")
+                        Spacer()
+                    }
+                }
+            }
+            .toolbar(.hidden, for: .navigationBar)
+            .onAppear {
+                isAppeared = true
+                VideoFocus.shared.beginExclusive(focusID)  // inline videos behind stay paused
+            }
+            .onDisappear {
+                isAppeared = false
+                VideoFocus.shared.endExclusive(focusID)
+            }
+            .withAppRoutes()
+        }
+        .environment(\.colorScheme, .dark)
+    }
+
+    /// "Following   Recents" at the top, the selected one bold and underlined.
+    private var tabPicker: some View {
+        HStack(spacing: 22) {
+            ForEach(Tab.allCases) { option in
+                Button {
+                    withAnimation(.easeOut(duration: 0.15)) { tab = option }
+                } label: {
+                    VStack(spacing: 4) {
+                        Text(option.rawValue)
+                            .font(.headline)
+                            .foregroundStyle(.white.opacity(tab == option ? 1 : 0.6))
+                        Capsule()
+                            .fill(.white)
+                            .frame(width: 24, height: 2)
+                            .opacity(tab == option ? 1 : 0)
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(tab == option ? .isSelected : [])
+            }
+        }
+        .shadow(color: .black.opacity(0.5), radius: 4)
+        .padding(.top, 8)
+    }
+}
+
+/// A page in feed mode: a post, or a sponsored page.
+private enum FeedModePage: Identifiable, Hashable {
+    case post(Post.ID)
+    case ad(slot: Int)
+
+    var id: String {
+        switch self {
+        case .post(let id): "post:\(id)"
+        case .ad(let slot): "ad:\(slot)"
+        }
+    }
+}
+
+/// One swipe-through list of full-screen videos (a feed mode tab).
+private struct FeedModePager: View {
+    @Environment(AppStore.self) private var store
+    let postIDs: [Post.ID]
+    /// The page to open on.
+    let startPageID: String
+    /// False while something is pushed over feed mode (nothing plays then).
+    let isActive: Bool
+    /// Reports the page on screen, so the tab can come back to it.
+    let onPageChange: (String) -> Void
 
     @State private var currentID: String?
     @State private var isPositioned = false
-    @State private var isAppeared = false
-    @State private var focusID = UUID()
-    /// This session's ad slots in `FeedAdStore`: a fresh range each time feed mode opens, apart
-    /// from the home feed's (0, 1, 2…), since one ad can't show in two places at once.
+    /// This pager's ad slots in `FeedAdStore`: a fresh range each time, apart from the home
+    /// feed's (0, 1, 2…), since one ad can't show in two places at once.
     @State private var adSlotBase = Int.random(in: 1...1_000_000) * 1_000
 
-    init(postIDs: [Post.ID], startID: Post.ID) {
-        self.postIDs = postIDs.contains(startID) ? postIDs : [startID]
-        self.startID = startID
-        _currentID = State(initialValue: Page.post(startID).id)
-    }
-
-    private enum Page: Identifiable, Hashable {
-        case post(Post.ID)
-        case ad(slot: Int)
-
-        var id: String {
-            switch self {
-            case .post(let id): "post:\(id)"
-            case .ad(let slot): "ad:\(slot)"
-            }
-        }
-    }
-
     /// Posts, with a sponsored page after every `FeedAds.interval` posts once its ad is ready.
-    private var pages: [Page] {
+    private var pages: [FeedModePage] {
         let posts = postIDs.filter { store.post($0) != nil }
-        var pages: [Page] = []
+        var pages: [FeedModePage] = []
         for (index, id) in posts.enumerated() {
             pages.append(.post(id))
             if (index + 1) % FeedAds.interval == 0, index < posts.count - 1 {
@@ -64,72 +188,46 @@ struct FeedModeView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            GeometryReader { geometry in
-                let insets = geometry.safeAreaInsets
-                ScrollViewReader { proxy in
-                    ScrollView(.vertical) {
-                        LazyVStack(spacing: 0) {
-                            ForEach(pages) { page in
-                                pageView(page, insets: insets)
-                                    .containerRelativeFrame([.horizontal, .vertical])
-                                    .id(page.id)
-                            }
+        GeometryReader { geometry in
+            let insets = geometry.safeAreaInsets
+            ScrollViewReader { proxy in
+                ScrollView(.vertical) {
+                    LazyVStack(spacing: 0) {
+                        ForEach(pages) { page in
+                            pageView(page, insets: insets)
+                                .containerRelativeFrame([.horizontal, .vertical])
+                                .id(page.id)
                         }
-                        .scrollTargetLayout()
                     }
-                    .scrollTargetBehavior(.paging)
-                    .scrollPosition(id: $currentID)
-                    .scrollIndicators(.hidden)
-                    .ignoresSafeArea()
-                    .opacity(isPositioned ? 1 : 0)
-                    .task {
-                        // Start on the tapped video (belt and braces: the lazy stack can ignore
-                        // the initial scroll position).
-                        guard !isPositioned else { return }
-                        await Task.yield()
-                        proxy.scrollTo(Page.post(startID).id, anchor: .top)
-                        isPositioned = true
-                    }
+                    .scrollTargetLayout()
+                }
+                .scrollTargetBehavior(.paging)
+                .scrollPosition(id: $currentID)
+                .scrollIndicators(.hidden)
+                .ignoresSafeArea()
+                .opacity(isPositioned ? 1 : 0)
+                .task {
+                    // Open on the right video (belt and braces: the lazy stack can ignore the
+                    // initial scroll position).
+                    guard !isPositioned else { return }
+                    currentID = startPageID
+                    await Task.yield()
+                    proxy.scrollTo(startPageID, anchor: .top)
+                    isPositioned = true
                 }
             }
-            .background(Color.black)
-            .overlay(alignment: .topLeading) {
-                Button {
-                    dismiss()
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.title3.bold())
-                        .foregroundStyle(.white)
-                        .frame(width: 44, height: 44)
-                        .shadow(color: .black.opacity(0.5), radius: 4)
-                }
-                .padding(.leading, 8)
-                .accessibilityLabel("Back")
-            }
-            .toolbar(.hidden, for: .navigationBar)
-            .onAppear {
-                isAppeared = true
-                VideoFocus.shared.beginExclusive(focusID)  // inline videos behind stay paused
-                pageChanged()
-            }
-            .onDisappear {
-                isAppeared = false
-                VideoFocus.shared.endExclusive(focusID)
-            }
-            .onChange(of: currentID) { _, _ in pageChanged() }
-            .withAppRoutes()
         }
-        .environment(\.colorScheme, .dark)
+        .onAppear { pageChanged() }
+        .onChange(of: currentID) { _, _ in pageChanged() }
         .onDisappear { FeedAds.releaseFeedModeSlots(from: adSlotBase) }
     }
 
     @ViewBuilder
-    private func pageView(_ page: Page, insets: EdgeInsets) -> some View {
+    private func pageView(_ page: FeedModePage, insets: EdgeInsets) -> some View {
         switch page {
         case .post(let id):
             if let post = store.post(id) {
-                FeedModePostPage(post: post, isCurrent: isAppeared && currentID == page.id, insets: insets)
+                FeedModePostPage(post: post, isCurrent: isActive && currentID == page.id, insets: insets)
             }
         case .ad(let slot):
             FeedModeAdPage(slot: slot, insets: insets)
@@ -139,9 +237,11 @@ struct FeedModeView: View {
     /// Ads: ask for the next one a few videos ahead; a slot passed without an ad stays empty
     /// (so a page never appears above the one you're on).
     private func pageChanged() {
+        guard let currentID else { return }
+        onPageChange(currentID)
         let posts = postIDs.filter { store.post($0) != nil }
-        guard let currentID, currentID.hasPrefix("post:"),
-              let index = posts.firstIndex(where: { Page.post($0).id == currentID }) else { return }
+        guard currentID.hasPrefix("post:"),
+              let index = posts.firstIndex(where: { FeedModePage.post($0).id == currentID }) else { return }
         let upcoming = (index + FeedAds.lookahead) / FeedAds.interval - 1
         if upcoming >= 0 { FeedAds.prepare(slot: adSlotBase + upcoming) }
         // Slots before this video have been passed.
