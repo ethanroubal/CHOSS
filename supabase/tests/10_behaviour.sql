@@ -97,3 +97,15 @@ select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a
 delete from page_comments where climb_id is not null;
 select 'page comments after alex deletes one' as check, count(*) from page_comments;
 reset role;
+
+-- A link or "other" post can't propose a grade.
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
+do $$ begin
+  begin insert into posts (author_id, place_id, discipline, send_style, proposed_grade_system, proposed_grade_value)
+          select alex, yosemite, 'boulder', 'link', 'vScale', 'V9' from ids;
+        raise exception 'BROKEN: graded a link';
+  exception when check_violation then raise notice 'ok: links cannot propose a grade'; end;
+end $$;
+insert into posts (author_id, place_id, discipline, send_style) select alex, yosemite, 'boulder', 'other' from ids;
+reset role;

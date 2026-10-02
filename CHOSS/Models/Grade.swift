@@ -283,6 +283,9 @@ enum SendStyle: String, Codable, CaseIterable, Identifiable, Hashable {
 
     var id: Self { self }
 
+    /// Only a send of the whole climb can propose its grade (not a link or "other").
+    var allowsProposedGrade: Bool { self != .link && self != .other }
+
     var displayName: String {
         switch self {
         case .onsight: "Onsight"

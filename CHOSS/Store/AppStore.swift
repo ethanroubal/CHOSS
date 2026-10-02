@@ -690,7 +690,7 @@ final class AppStore {
             routeName: draft.routeName.trimmingCharacters(in: .whitespacesAndNewlines),
             discipline: draft.discipline,
             grade: nil,  // the climb's grade is the average of proposed grades
-            proposedGrade: draft.proposedGrade,
+            proposedGrade: draft.sendStyle.allowsProposedGrade ? draft.proposedGrade : nil,
             sendStyle: draft.sendStyle,
             caption: draft.caption.trimmingCharacters(in: .whitespacesAndNewlines),
             createdAt: .now

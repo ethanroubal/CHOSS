@@ -198,6 +198,10 @@ struct ComposeView: View {
             Picker("Style", selection: $draft.sendStyle) {
                 ForEach(SendStyle.allCases) { Label($0.displayName, systemImage: $0.symbolName).tag($0) }
             }
+            .onChange(of: draft.sendStyle) { _, style in
+                // Links and "other" can't propose a grade.
+                if !style.allowsProposedGrade { draft.proposedGrade = nil }
+            }
 
             // The name comes after discipline and style. Outdoor climbs are picked from the climb
             // list (or added as new) so sends of the same climb land together; board problems are
@@ -334,6 +338,7 @@ struct ComposeView: View {
             }
 
             OptionalGradePicker(title: "Proposed grade", system: draft.gradeSystem, grade: $draft.proposedGrade)
+                .disabled(!draft.sendStyle.allowsProposedGrade)
 
             if let current = currentClimbGrade {
                 LabeledContent("Current grade") {
@@ -346,7 +351,11 @@ struct ComposeView: View {
         } header: {
             Text("Grade")
         } footer: {
-            Text("Propose what you think it is. The climb's grade is the average of everyone's proposed grades, and yours counts toward it.")
+            if draft.sendStyle.allowsProposedGrade {
+                Text("Propose what you think it is. The climb's grade is the average of everyone's proposed grades, and yours counts toward it.")
+            } else {
+                Text("A \(draft.sendStyle.displayName.lowercased()) isn't a send of the whole climb, so it can't propose a grade.")
+            }
         }
     }
 
