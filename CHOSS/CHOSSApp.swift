@@ -15,6 +15,7 @@ struct CHOSSApp: App {
     var body: some Scene {
         WindowGroup {
             AppRoot()
+                .tint(Color("AccentColor"))  // brand green everywhere, whatever the Info.plist says
         }
     }
 }

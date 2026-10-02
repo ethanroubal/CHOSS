@@ -4,6 +4,10 @@
 <dict>
 	<!-- Merged into the generated Info.plist (GENERATE_INFOPLIST_FILE). Values come from the
 	     ADMOB_* build settings in the project, so test and real IDs are set in one place. -->
+	<!-- The app's green accent. The asset catalog normally adds this to the generated plist, but
+	     with a plist file of our own it went missing and controls turned system blue. -->
+	<key>NSAccentColorName</key>
+	<string>AccentColor</string>
 	<key>GADApplicationIdentifier</key>
 	<string>$(ADMOB_APP_ID)</string>
 	<key>CHOSSAppOpenAdUnitID</key>

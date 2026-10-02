@@ -15,8 +15,9 @@ import GoogleMobileAds
 final class AppOpenAdManager: NSObject {
     static let shared = AppOpenAdManager()
 
-    /// How long launch waits for an ad that's still loading.
-    private let loadTimeout: Duration = .seconds(4)
+    /// How long launch waits for an ad that's still loading (the first load after install,
+    /// while the SDK starts up, can take several seconds).
+    private let loadTimeout: Duration = .seconds(8)
     /// Only on opening the app: if the main screen first appears later than this (signing in,
     /// setting up a new profile), no ad, so new climbers aren't greeted by one.
     private let launchWindow: TimeInterval = 15
@@ -35,11 +36,23 @@ final class AppOpenAdManager: NSObject {
         isStarted = true
         launchedAt = .now
         #if canImport(GoogleMobileAds)
-        guard let unitID = Self.adUnitID else { return }
+        guard let unitID = Self.adUnitID else {
+            print("[Ads] No app-open ad unit id in Info.plist (CHOSSAppOpenAdUnitID); no launch ad.")
+            return
+        }
         MobileAds.shared.start(completionHandler: nil)
         loadTask = Task {
-            try? await AppOpenAd.load(with: unitID, request: Request())
+            do {
+                let ad = try await AppOpenAd.load(with: unitID, request: Request())
+                print("[Ads] Launch ad loaded.")
+                return ad
+            } catch {
+                print("[Ads] Launch ad failed to load: \(error.localizedDescription)")
+                return nil
+            }
         }
+        #else
+        print("[Ads] GoogleMobileAds isn't linked into the app; no launch ad.")
         #endif
     }
 
@@ -47,7 +60,10 @@ final class AppOpenAdManager: NSObject {
     func showOnLaunchIfReady() async {
         guard !hasShownThisLaunch else { return }
         hasShownThisLaunch = true
-        guard Date.now.timeIntervalSince(launchedAt) < launchWindow else { return }
+        guard Date.now.timeIntervalSince(launchedAt) < launchWindow else {
+            print("[Ads] Main screen appeared too long after launch (sign-in / setup); no launch ad.")
+            return
+        }
         #if canImport(GoogleMobileAds)
         guard let loadTask else { return }
         // Wait for the ad, but no longer than the timeout.
@@ -61,7 +77,14 @@ final class AppOpenAdManager: NSObject {
             group.cancelAll()
             return first
         }
-        guard let loaded, let root = Self.topViewController() else { return }
+        guard let loaded else {
+            print("[Ads] Launch ad wasn't ready in time; skipped.")
+            return
+        }
+        guard let root = Self.topViewController() else {
+            print("[Ads] Nowhere to show the launch ad from; skipped.")
+            return
+        }
         ad = loaded
         loaded.fullScreenContentDelegate = self
         loaded.present(from: root)
@@ -94,6 +117,7 @@ extension AppOpenAdManager: FullScreenContentDelegate {
     }
 
     nonisolated func ad(_ ad: FullScreenPresentingAd, didFailToPresentFullScreenContentWithError error: Error) {
+        print("[Ads] Launch ad couldn't be shown: \(error.localizedDescription)")
         Task { @MainActor in self.ad = nil }
     }
 }
