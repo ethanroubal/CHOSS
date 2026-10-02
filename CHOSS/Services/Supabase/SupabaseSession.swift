@@ -24,7 +24,14 @@ final class SupabaseSession {
 
     init(environment: BackendEnvironment) {
         self.environment = environment
-        client = SupabaseClient(supabaseURL: environment.supabaseURL!, supabaseKey: environment.publishableKey!)
+        client = SupabaseClient(
+            supabaseURL: environment.supabaseURL!,
+            supabaseKey: environment.publishableKey!,
+            // Emit the saved session as-is at launch (`listenForChanges` already treats an
+            // expired one as signed out). Opts in to the library's upcoming behaviour and
+            // silences its warning in the console.
+            options: SupabaseClientOptions(auth: .init(emitLocalSessionAsInitialSession: true))
+        )
         Task { await listenForChanges() }
     }
 
