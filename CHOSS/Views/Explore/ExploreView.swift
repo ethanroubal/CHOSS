@@ -64,10 +64,9 @@ struct ExploreView: View {
 
                 placeCarousel(title: "Popular gyms", places: store.popularPlaceIDs(kind: .gym).prefix(15).compactMap { store.place($0) })
                 recentClimbsCarousel
-                placeCarousel(title: "Popular crags", places: store.popularPlaceIDs(kind: .crag).prefix(15).compactMap { store.place($0) })
                 climbCarousel
-
                 trendingCarousel
+                placeCarousel(title: "Popular crags", places: store.popularPlaceIDs(kind: .crag).prefix(15).compactMap { store.place($0) })
                 BrandFooter()
             }
         }
