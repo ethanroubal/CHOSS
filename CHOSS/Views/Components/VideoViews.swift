@@ -1,5 +1,6 @@
 import SwiftUI
 import AVKit
+import Observation
 
 /// Generates and caches poster frames for send videos.
 @MainActor
@@ -224,6 +225,54 @@ struct VideoScrubber: View {
     }
 }
 
+/// Decides which single video plays. Every inline player that's mostly on screen reports where
+/// it is; the one showing the most of itself (nearest the middle on a tie) is the active one and
+/// the rest stay paused. A full-screen video takes over while it's open.
+@MainActor
+@Observable
+final class VideoFocus {
+    static let shared = VideoFocus()
+
+    /// The player allowed to play (and count a view) right now.
+    private(set) var activeID: UUID?
+    @ObservationIgnored private var frames: [UUID: CGRect] = [:]
+    @ObservationIgnored private var exclusive: [UUID] = []
+
+    /// A player's on-screen frame, or nil when it's not a candidate (off screen, covered…).
+    func report(_ id: UUID, frame: CGRect?) {
+        frames[id] = frame
+        choose()
+    }
+
+    /// A full-screen player: only it plays until `endExclusive`.
+    func beginExclusive(_ id: UUID) {
+        exclusive.append(id)
+        choose()
+    }
+
+    func endExclusive(_ id: UUID) {
+        exclusive.removeAll { $0 == id }
+        choose()
+    }
+
+    private func choose() {
+        let next: UUID?
+        if let top = exclusive.last {
+            next = top
+        } else {
+            let screen = UIScreen.main.bounds
+            next = frames.max { lhs, rhs in
+                let left = lhs.value.intersection(screen).height
+                let right = rhs.value.intersection(screen).height
+                if abs(left - right) > 1 { return left < right }
+                // Same amount showing: the higher one (the one you reached first) wins.
+                return lhs.value.minY > rhs.value.minY
+            }?.key
+        }
+        if next != activeID { activeID = next }
+    }
+}
+
 /// Plain video surface with no system controls (taps are handled by `SendVideoPlayer`).
 private struct PlayerSurface: UIViewRepresentable {
     let player: AVPlayer
@@ -268,6 +317,9 @@ struct SendVideoPlayer: View {
     @AppStorage("videosMuted") private var isMuted = false
     @StateObject private var playback = LoopingPlayback()
     @State private var isOnScreen = false
+    /// This player's id for `VideoFocus` (only the focused video plays).
+    @State private var focusID = UUID()
+    @State private var screenFrame: CGRect = .zero
     /// False while another screen is pushed on top (the view stays in the hierarchy but hidden).
     @State private var isAppeared = false
     @State private var isPausedByUser = false
@@ -364,21 +416,31 @@ struct SendVideoPlayer: View {
                     playback.seek(to: seconds)
                 }
             }
-            .onChange(of: isFullScreen) { _, _ in updatePlayback() }
-            // Autoplay when at least 60% of the video is on screen.
-            .onGeometryChange(for: Bool.self) { proxy in
-                let frame = proxy.frame(in: .global)
-                let screen = UIScreen.main.bounds
-                let visible = frame.intersection(screen)
-                guard !visible.isNull, frame.height > 0 else { return false }
-                return visible.height / frame.height >= 0.6
-            } action: { onScreen in
-                isOnScreen = onScreen
-                if !onScreen { isPausedByUser = false }
+            .onChange(of: isFullScreen) { _, _ in
+                reportFocus()
                 updatePlayback()
             }
+            // A candidate to autoplay when at least 60% of the video is on screen; of those, only
+            // the one `VideoFocus` picks plays.
+            .onGeometryChange(for: CGRect.self) { proxy in
+                proxy.frame(in: .global)
+            } action: { frame in
+                screenFrame = frame
+                let visible = frame.intersection(UIScreen.main.bounds)
+                let onScreen = !visible.isNull && frame.height > 0 && visible.height / frame.height >= 0.6
+                if onScreen != isOnScreen {
+                    isOnScreen = onScreen
+                    if !onScreen { isPausedByUser = false }
+                }
+                reportFocus()
+            }
+            .onChange(of: isActive) { _, _ in updatePlayback() }
+            .onChange(of: isOnScreen) { _, _ in updatePlayback() }
             .onChange(of: isMuted) { _, muted in playback.player.isMuted = muted }
-            .onChange(of: scenePhase) { _, _ in updatePlayback() }
+            .onChange(of: scenePhase) { _, _ in
+                reportFocus()
+                updatePlayback()
+            }
             // Leaving the screen (scrolled away, covered, full screen…) remembers where the video
             // was, so coming back carries on from there.
             .onChange(of: isViewable) { _, viewable in
@@ -395,18 +457,30 @@ struct SendVideoPlayer: View {
             }
             .onAppear {
                 isAppeared = true
+                reportFocus()
                 updatePlayback()
             }
             .onDisappear {
                 isAppeared = false
+                VideoFocus.shared.report(focusID, frame: nil)
                 rememberPosition()
                 playback.unload()
             }
     }
 
-    /// Physically on the user's screen right now.
-    private var isViewable: Bool {
+    /// The one video allowed to play right now.
+    private var isActive: Bool { VideoFocus.shared.activeID == focusID }
+
+    /// Mostly on screen, not covered, app in the foreground.
+    private var isCandidate: Bool {
         isOnScreen && isAppeared && !isFullScreen && scenePhase == .active
+    }
+
+    /// Physically on the user's screen and the video being played.
+    private var isViewable: Bool { isCandidate && isActive }
+
+    private func reportFocus() {
+        VideoFocus.shared.report(focusID, frame: isCandidate ? screenFrame : nil)
     }
 
     /// Saves where the video is (if it has started playing) for when it comes back on screen.
@@ -417,7 +491,7 @@ struct SendVideoPlayer: View {
 
     private func updatePlayback() {
         guard let url = post.videoURL else { return }
-        if isOnScreen && isAppeared && !isFullScreen && !playback.isScrubbing && scenePhase == .active {
+        if isViewable && !playback.isScrubbing {
             // No-op (keeps position) if already loaded; otherwise carries on where it was left.
             playback.load(url, startAt: resumeAt ?? store.playbackPosition(of: post.id))
             resumeAt = nil
@@ -451,6 +525,7 @@ struct FullScreenVideoView: View {
     @State private var isPaused = false
     @State private var dragOffset: CGFloat = 0
     @State private var likeBurst = 0
+    @State private var focusID = UUID()
 
     // Zoom: the committed state, plus the last gesture values so each frame applies only the
     // change since the previous one (no jumps when a finger lifts or lands mid-gesture).
@@ -550,12 +625,15 @@ struct FullScreenVideoView: View {
         }
         .statusBarHidden()
         .onAppear {
+            // Only this video plays while it's open.
+            VideoFocus.shared.beginExclusive(focusID)
             guard let url = post.videoURL else { return }
             playback.load(url, startAt: startAt)
             playback.player.isMuted = isMuted
             playback.play()
         }
         .onDisappear {
+            VideoFocus.shared.endExclusive(focusID)
             onClose(playback.currentSeconds)
             playback.unload()
         }
