@@ -92,7 +92,7 @@ struct FeedModeView: View {
                             dismiss()
                         } label: {
                             Image(systemName: "chevron.left")
-                                .font(.title3.bold())
+                                .font(.title2.bold())
                                 .foregroundStyle(.white)
                                 .frame(width: 44, height: 44)
                                 .shadow(color: .black.opacity(0.5), radius: 4)
@@ -126,7 +126,7 @@ struct FeedModeView: View {
                 } label: {
                     VStack(spacing: 4) {
                         Text(option.rawValue)
-                            .font(.headline)
+                            .font(.title3.bold())
                             .foregroundStyle(.white.opacity(tab == option ? 1 : 0.6))
                         Capsule()
                             .fill(.white)
@@ -405,49 +405,49 @@ private struct FeedModePostPage: View {
 
     /// Like, comment, repost, sound: down the right edge.
     private var actions: some View {
-        VStack(spacing: 18) {
-            VStack(spacing: 2) {
+        VStack(spacing: 22) {
+            VStack(spacing: 3) {
                 Button {
                     store.toggleLike(post.id)
                 } label: {
-                    FlexIcon(filled: store.isLiked(post.id), size: 30)
+                    FlexIcon(filled: store.isLiked(post.id), size: 38)
                         .foregroundStyle(store.isLiked(post.id) ? Color.accentColor : .white)
                 }
                 .accessibilityLabel(store.isLiked(post.id) ? "Unlike" : "Like")
                 Button(countLabel(post.likedBy.count)) { showingLikes = true }
-                    .font(.caption.bold())
+                    .font(.subheadline.bold())
                     .accessibilityLabel("\(post.likedBy.count) likes")
                     .accessibilityHint("Shows who liked this")
             }
-            VStack(spacing: 2) {
+            VStack(spacing: 3) {
                 Button {
                     showingComments = true
                 } label: {
-                    Image(systemName: "bubble.right").font(.title2)
+                    Image(systemName: "bubble.right").font(.system(size: 30))
                 }
                 .accessibilityLabel("Comments")
-                Text(countLabel(post.comments.count)).font(.caption.bold())
+                Text(countLabel(post.comments.count)).font(.subheadline.bold())
             }
             if store.canRepost(post) {
-                VStack(spacing: 2) {
+                VStack(spacing: 3) {
                     Button {
                         store.toggleRepost(post.id)
                     } label: {
                         Image(systemName: "arrow.2.squarepath")
-                            .font(.title2)
+                            .font(.system(size: 30))
                             .foregroundStyle(store.isReposted(post.id) ? Color.green : .white)
                             .symbolEffect(.bounce, value: store.isReposted(post.id))
                     }
                     .accessibilityLabel(store.isReposted(post.id) ? "Undo repost" : "Repost")
-                    Text(countLabel(store.repostCount(post.id))).font(.caption.bold())
+                    Text(countLabel(store.repostCount(post.id))).font(.subheadline.bold())
                 }
             }
             Button {
                 isMuted.toggle()
             } label: {
                 Image(systemName: isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                    .font(.body.bold())
-                    .frame(width: 36, height: 36)
+                    .font(.title3.bold())
+                    .frame(width: 46, height: 46)
                     .background(.black.opacity(0.45), in: Circle())
             }
             .accessibilityLabel(isMuted ? "Unmute" : "Mute")
