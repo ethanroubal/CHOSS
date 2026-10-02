@@ -583,14 +583,20 @@ struct CragPickerView: View {
         }
         .navigationTitle("Choose a crag")
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
-                    prompt: "Search crags by name or town")
+        // A pinned search box rather than `.searchable`: inside the composer's navigation stack the
+        // system search bar could stay on screen after going back to New Send.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            InlineSearchField(prompt: "Search crags by name or town", text: $query)
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+                .background(.bar)
+        }
         .autocorrectionDisabled()
         .runSearch(query, version: store.searchIndexVersion, into: $search) { [store] text in
             await store.searchPlaceIDs(text, kind: .crag)
         }
         .onChange(of: query) { pageLimit = Paging.pageSize }
-        .onSubmit(of: .search) {
+        .onSubmit {
             let text = query
             guard !SearchResults.clean(text).isEmpty else { return }
             Task {

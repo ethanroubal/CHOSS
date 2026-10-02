@@ -69,10 +69,16 @@ struct RoutePickerView: View {
         }
         .navigationTitle("Problem / route")
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
-                    prompt: place.map { "Search climbs at \($0.name)" } ?? "Search climbs at every crag")
+        // A pinned search box rather than `.searchable`: inside the composer's navigation stack the
+        // system search bar could stay on screen after going back to New Send.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            InlineSearchField(prompt: place.map { "Search climbs at \($0.name)" } ?? "Search climbs at every crag", text: $query)
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+                .background(.bar)
+        }
         .autocorrectionDisabled()
-        .onSubmit(of: .search) { submitBestMatch() }
+        .onSubmit { submitBestMatch() }
         .runSearch(placeID == nil ? query : "", version: store.searchIndexVersion, into: $results) { [store] text in
             await store.searchClimbIDs(text, limit: 50)
         }
