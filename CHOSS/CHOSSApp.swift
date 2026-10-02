@@ -8,6 +8,8 @@ struct CHOSSApp: App {
         // (the default "ambient" category mutes it), and duck other audio instead of stopping it.
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback, options: [.duckOthers])
         try? AVAudioSession.sharedInstance().setActive(true)
+        // Start loading the ad shown when the app opens (see AppOpenAdManager).
+        AppOpenAdManager.shared.start()
     }
 
     var body: some Scene {

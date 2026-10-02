@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		C0550000000000000000B001 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = C0550000000000000000B003 /* Supabase */; };
+		C0550000000000000000B004 /* GoogleMobileAds in Frameworks */ = {isa = PBXBuildFile; productRef = C0550000000000000000B006 /* GoogleMobileAds */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -28,6 +29,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				C0550000000000000000B001 /* Supabase in Frameworks */,
+				C0550000000000000000B004 /* GoogleMobileAds in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -71,6 +73,7 @@
 			name = CHOSS;
 			packageProductDependencies = (
 				C0550000000000000000B003 /* Supabase */,
+				C0550000000000000000B006 /* GoogleMobileAds */,
 			);
 			productName = CHOSS;
 			productReference = C0550000000000000000A001 /* CHOSS.app */;
@@ -102,6 +105,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				C0550000000000000000B002 /* XCRemoteSwiftPackageReference "supabase-swift" */,
+				C0550000000000000000B005 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = C0550000000000000000A005 /* Products */;
@@ -200,10 +204,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ADMOB_APP_ID = "ca-app-pub-3940256099942544~1458002511";
+				ADMOB_APP_OPEN_AD_UNIT_ID = "ca-app-pub-3940256099942544/5575463023";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "CHOSS-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = CHOSS;
 				INFOPLIST_KEY_NSCameraUsageDescription = "CHOSS uses the camera to record videos of your sends.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "CHOSS uses your location to show gyms and crags near you.";
@@ -216,6 +223,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				OTHER_LDFLAGS = "-ObjC";
 				MARKETING_VERSION = 0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.choss.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -230,10 +238,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ADMOB_APP_ID = "ca-app-pub-3940256099942544~1458002511";
+				ADMOB_APP_OPEN_AD_UNIT_ID = "ca-app-pub-3940256099942544/5575463023";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "CHOSS-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = CHOSS;
 				INFOPLIST_KEY_NSCameraUsageDescription = "CHOSS uses the camera to record videos of your sends.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "CHOSS uses your location to show gyms and crags near you.";
@@ -246,6 +257,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				OTHER_LDFLAGS = "-ObjC";
 				MARKETING_VERSION = 0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.choss.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -287,6 +299,14 @@
 				minimumVersion = 2.20.0;
 			};
 		};
+		C0550000000000000000B005 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/googleads/swift-package-manager-google-mobile-ads";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -294,6 +314,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = C0550000000000000000B002 /* XCRemoteSwiftPackageReference "supabase-swift" */;
 			productName = Supabase;
+		};
+		C0550000000000000000B006 /* GoogleMobileAds */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C0550000000000000000B005 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */;
+			productName = GoogleMobileAds;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

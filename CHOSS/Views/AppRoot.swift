@@ -20,6 +20,7 @@ private struct DemoRoot: View {
         RootTabView()
             .environment(store)
             .task { await store.load() }
+            .task { await AppOpenAdManager.shared.showOnLaunchIfReady() }
     }
 }
 
@@ -66,6 +67,8 @@ private struct SignedInRoot: View {
                 }
             } else {
                 RootTabView()
+                    // The ad when the app opens, once the main screen is up.
+                    .task { await AppOpenAdManager.shared.showOnLaunchIfReady() }
             }
         }
         .environment(store)
