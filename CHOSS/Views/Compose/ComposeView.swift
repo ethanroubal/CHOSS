@@ -184,7 +184,7 @@ struct ComposeView: View {
             Text("Video")
         } footer: {
             if draft.videoURL == nil {
-                Text("A video is required to post a send.")
+                Text("A video is required to post.")
             }
         }
     }

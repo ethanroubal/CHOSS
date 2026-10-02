@@ -8,7 +8,7 @@ struct PlaceDetailView: View {
     let placeID: Place.ID
 
     private enum Tab: String, CaseIterable, Identifiable {
-        case sends = "Sends"
+        case sends = "Videos"
         case climbs = "Climbs"
         var id: Self { self }
     }
@@ -159,7 +159,7 @@ struct PlaceDetailView: View {
         VStack(spacing: 12) {
             HStack {
                 StatView(value: store.followerCount(of: place.id), label: "Followers")
-                StatView(value: store.postCount(at: place.id), label: "Sends")
+                StatView(value: store.postCount(at: place.id), label: "Videos")
                 StatView(value: Set(store.posts(at: place.id).map(\.authorID)).count, label: "Climbers")
                 if place.kind == .crag {
                     StatView(value: store.climbs(at: place.id).count, label: "Climbs")
@@ -172,7 +172,7 @@ struct PlaceDetailView: View {
                 Button {
                     composing = true
                 } label: {
-                    Label("Post a send", systemImage: "video.badge.plus")
+                    Label("Post a video", systemImage: "video.badge.plus")
                         .font(.subheadline.bold())
                 }
                 .buttonStyle(.bordered)
@@ -189,12 +189,12 @@ struct PlaceDetailView: View {
 
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Sends").font(.title3.bold())
+                Text("Videos").font(.title3.bold())
                 Spacer()
                 Menu {
                     Picker("Discipline", selection: $discipline) {
                         Text("All").tag(ClimbDiscipline?.none)
-                        // Every discipline (not just the ones the place lists), with how many sends each has.
+                        // Every discipline (not just the ones the place lists), with how many videos each has.
                         ForEach(ClimbDiscipline.allCases) { d in
                             Label {
                                 Text(counts[d].map { "\(d.displayName) (\($0))" } ?? d.displayName)
@@ -213,9 +213,9 @@ struct PlaceDetailView: View {
 
             if filtered.isEmpty {
                 ContentUnavailableView(
-                    discipline.map { "No \($0.displayName.lowercased()) sends yet" } ?? "No sends yet",
+                    discipline.map { "No \($0.displayName.lowercased()) videos yet" } ?? "No videos yet",
                     systemImage: "figure.climbing",
-                    description: Text("Be the first to post a send at \(place.name).")
+                    description: Text("Be the first to post a video at \(place.name).")
                 )
             } else {
                 LazyVStack(spacing: 12) {

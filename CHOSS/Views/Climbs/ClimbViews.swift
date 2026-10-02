@@ -114,7 +114,7 @@ struct ClimbDetailView: View {
                     Button {
                         composing = true
                     } label: {
-                        Label("Post your send of \(climb.name)", systemImage: "video.badge.plus")
+                        Label("Post a video of \(climb.name)", systemImage: "video.badge.plus")
                             .font(.subheadline.bold())
                             .frame(maxWidth: .infinity)
                     }
