@@ -207,8 +207,9 @@ private struct NativeAdCard: UIViewRepresentable {
         stack.translatesAutoresizingMaskIntoConstraints = false
         adView.addSubview(stack)
         NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: adView.topAnchor),
-            stack.bottomAnchor.constraint(equalTo: adView.bottomAnchor),
+            // A little room top and bottom so rounding never puts an asset on (or past) the edge.
+            stack.topAnchor.constraint(equalTo: adView.topAnchor, constant: 4),
+            stack.bottomAnchor.constraint(equalTo: adView.bottomAnchor, constant: -4),
             stack.leadingAnchor.constraint(equalTo: adView.leadingAnchor),
             stack.trailingAnchor.constraint(equalTo: adView.trailingAnchor),
         ])
@@ -228,12 +229,18 @@ private struct NativeAdCard: UIViewRepresentable {
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: NativeAdView, context: Context) -> CGSize? {
-        let width = proposal.width ?? UIScreen.main.bounds.width
+        let width = proposal.width.flatMap { $0 > 0 ? $0 : nil } ?? UIScreen.main.bounds.width
+        // Tell the wrapping labels how wide they'll be, so a two-line description is measured
+        // as two lines. If the card were sized too short, its contents would spill past the
+        // ad view's edges, which Google's validator reports ("assets outside native ad view").
+        let textWidth = width - 32
+        (uiView.bodyView as? UILabel)?.preferredMaxLayoutWidth = textWidth
+        (uiView.headlineView as? UILabel)?.preferredMaxLayoutWidth = textWidth - 46  // minus the icon
         let size = uiView.systemLayoutSizeFitting(
             CGSize(width: width, height: UIView.layoutFittingCompressedSize.height),
             withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel
         )
-        return CGSize(width: width, height: size.height)
+        return CGSize(width: width, height: ceil(size.height))
     }
 
     private func configure(_ adView: NativeAdView) {
