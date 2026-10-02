@@ -232,28 +232,37 @@ struct PostFeedView: View {
     @Environment(AppStore.self) private var store
     let feed: PostFeed
 
-    @State private var position: Post.ID?
-
-    init(feed: PostFeed) {
-        self.feed = feed
-        _position = State(initialValue: feed.startID)
-    }
+    /// Hidden until it has jumped to the tapped post, so it doesn't flash the first one.
+    @State private var isPositioned = false
 
     var body: some View {
         let posts = feed.postIDs.compactMap { store.post($0) }
 
-        ScrollView {
-            LazyVStack(spacing: 12) {
-                ForEach(posts) { post in
-                    VStack(spacing: 12) {
-                        PostCardView(post: post)
-                        Divider()
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 12) {
+                    ForEach(posts) { post in
+                        VStack(spacing: 12) {
+                            PostCardView(post: post)
+                            Divider()
+                        }
+                        .id(post.id)
                     }
                 }
             }
-            .scrollTargetLayout()
+            .opacity(isPositioned ? 1 : 0)
+            // Open on the post that was tapped (an initial `.scrollPosition` was sometimes ignored
+            // by the lazy stack, leaving the feed on its first post). Jump once the stack has laid
+            // out, then show it.
+            .task {
+                guard !isPositioned else { return }
+                await Task.yield()
+                proxy.scrollTo(feed.startID, anchor: .top)
+                await Task.yield()
+                proxy.scrollTo(feed.startID, anchor: .top)  // again, now the rows above are measured
+                isPositioned = true
+            }
         }
-        .scrollPosition(id: $position, anchor: .top)
         .overlay {
             if posts.isEmpty {
                 ContentUnavailableView("Post not found", systemImage: "questionmark.video")
