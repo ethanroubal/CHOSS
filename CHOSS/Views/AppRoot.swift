@@ -30,14 +30,27 @@ private struct LiveRoot: View {
     @State private var session = SupabaseSession(environment: BackendEnvironment.current)
 
     var body: some View {
-        switch session.state {
-        case .loading:
-            SplashView()
-        case .signedOut:
-            SignInView(session: session)
-        case .signedIn(let userID):
-            SignedInRoot(session: session, userID: userID)
-                .id(userID)   // a fresh store per account
+        Group {
+            switch session.state {
+            case .loading:
+                SplashView()
+            case .signedOut:
+                SignInView(session: session)
+            case .signedIn(let userID):
+                SignedInRoot(session: session, userID: userID)
+                    .id(userID)   // a fresh store per account
+            }
+        }
+        // The password-reset email's link opens the app here.
+        .onOpenURL { url in
+            Task { await session.handleOpenURL(url) }
+        }
+        // Only reachable from that link: choose a new password before anything else.
+        .fullScreenCover(isPresented: Binding(
+            get: { session.isResettingPassword },
+            set: { _ in }
+        )) {
+            ResetPasswordView(session: session)
         }
     }
 }

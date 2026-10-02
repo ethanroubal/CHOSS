@@ -206,6 +206,9 @@ To run on the old sample data with no account, launch with `-useDemoData YES` (X
 4. **Configure sign-in** in Supabase → Authentication:
    - **Email:** on by default. For quick testing you can turn off "Confirm email" (Sign In /
      Providers → Email); turn it back on for production.
+   - **Password reset:** under URL Configuration → Redirect URLs, add
+     `com.choss.app://reset-password`. The reset email's link then opens the app on its
+     "Choose a new password" screen.
    - **Apple:** turn on the Apple provider and follow its instructions (Services ID, key from
      your Apple Developer account). In Xcode, add the **Sign in with Apple** capability to the
      CHOSS target (Signing & Capabilities → + Capability).

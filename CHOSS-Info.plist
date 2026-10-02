@@ -6,6 +6,19 @@
 	     ADMOB_* build settings in the project, so test and real IDs are set in one place. -->
 	<!-- The app's green accent. The asset catalog normally adds this to the generated plist, but
 	     with a plist file of our own it went missing and controls turned system blue. -->
+	<!-- Opens the app from links back to it, e.g. the password-reset email
+	     (com.choss.app://reset-password). -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.choss.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.choss.app</string>
+			</array>
+		</dict>
+	</array>
 	<key>NSAccentColorName</key>
 	<string>AccentColor</string>
 	<key>GADApplicationIdentifier</key>

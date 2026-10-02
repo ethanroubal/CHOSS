@@ -19,6 +19,9 @@ final class SupabaseSession {
     let client: SupabaseClient
     let environment: BackendEnvironment
     private(set) var state: State = .loading
+    /// Signed in through a password-reset link: the app shows the "choose a new password"
+    /// screen until it's done. Only a reset link (see `handleOpenURL`) sets this.
+    private(set) var isResettingPassword = false
     private(set) var email: String?
     var errorMessage: String?
     var isWorking = false
@@ -38,7 +41,8 @@ final class SupabaseSession {
 
     /// Follows sign-in / sign-out / token refresh, starting with the saved session (if any).
     private func listenForChanges() async {
-        for await (_, session) in client.auth.authStateChanges {
+        for await (event, session) in client.auth.authStateChanges {
+            if event == .passwordRecovery { isResettingPassword = true }
             if let session, !session.isExpired {
                 // Postgres prints uuids in lowercase; keep ids comparable with what it returns.
                 state = .signedIn(userID: session.user.id.uuidString.lowercased())
@@ -109,7 +113,53 @@ final class SupabaseSession {
     }
 
     func sendPasswordReset(email: String) async {
-        await run { try await self.client.auth.resetPasswordForEmail(email) }
+        await run {
+            try await self.client.auth.resetPasswordForEmail(email, redirectTo: Self.passwordResetURL)
+        }
+    }
+
+    // MARK: Password reset
+
+    /// Where the reset email's link sends people: back into the app. Must be listed in
+    /// Supabase → Authentication → URL Configuration → Redirect URLs.
+    static let passwordResetURL = URL(string: "com.choss.app://reset-password")!
+
+    /// A link opened the app. A password-reset link signs you in (proving you own the email)
+    /// and opens the new-password screen; anything else is ignored.
+    func handleOpenURL(_ url: URL) async {
+        guard url.scheme == Self.passwordResetURL.scheme, url.host == Self.passwordResetURL.host else { return }
+        errorMessage = nil
+        do {
+            _ = try await client.auth.session(from: url)
+            isResettingPassword = true
+        } catch {
+            isResettingPassword = false
+            errorMessage = "That reset link has expired or was already used. "
+                + "Request a new one with “Forgot password?” (and open it on this phone)."
+        }
+    }
+
+    /// Saves the new password (you're signed in by the reset link). Returns false (with
+    /// `errorMessage` set) if it didn't work.
+    func setNewPassword(_ password: String) async -> Bool {
+        var saved = false
+        await run {
+            try await self.client.auth.update(user: UserAttributes(password: password))
+            saved = true
+        }
+        return saved
+    }
+
+    /// Closes the reset screen after a successful change and carries on into the app.
+    func finishPasswordReset() {
+        isResettingPassword = false
+    }
+
+    /// Leaves the reset screen without changing the password: signs out, so the link's
+    /// sign-in can't be used for anything else.
+    func cancelPasswordReset() async {
+        isResettingPassword = false
+        await signOut()
     }
 
     // MARK: Account
