@@ -67,14 +67,11 @@ struct ExploreView: View {
                 placeCarousel(title: "Popular crags", places: store.popularPlaceIDs(kind: .crag).prefix(15).compactMap { store.place($0) })
                 climbCarousel
 
-                Text("Trending sends")
-                    .font(.title3.bold())
-                    .padding(.horizontal)
-                PostGrid(posts: store.trendingPosts(discipline: discipline),
-                         title: discipline.map { "Trending \($0.displayName)" } ?? "Trending")
+                trendingCarousel
                 BrandFooter()
             }
         }
+        .fullScreenCover(item: $feedModeStart) { start in feedMode(start) }
     }
 
     private var disciplineChips: some View {
@@ -123,21 +120,42 @@ struct ExploreView: View {
         }
     }
 
+    /// Videos shown in each Explore video row (feed mode carries on through all of them).
+    private static let rowLimit = 6
+
     /// The newest videos (for the selected discipline). Tapping one opens feed mode on the
-    /// Recents tab at that video.
+    /// Recents tab at that video, where you can keep going through every recent video.
     @ViewBuilder
     private var recentClimbsCarousel: some View {
         let posts: [Post] = Array(store.posts.lazy
             .filter { $0.videoURL != nil && (discipline == nil || $0.discipline == discipline) }
-            .prefix(15))
+            .prefix(Self.rowLimit))
+        videoRow(title: "Recent climbs", posts: posts) { post in
+            FeedModeStart(postID: post.id, recents: true)
+        }
+    }
+
+    /// Trending videos (for the selected discipline): six here; tapping one opens feed mode
+    /// through all of them.
+    @ViewBuilder
+    private var trendingCarousel: some View {
+        let all = store.trendingPosts(discipline: discipline).filter { $0.videoURL != nil }
+        videoRow(title: discipline.map { "Trending \($0.displayName)" } ?? "Trending sends",
+                 posts: Array(all.prefix(Self.rowLimit))) { post in
+            FeedModeStart(postID: post.id, postIDs: all.map(\.id))
+        }
+    }
+
+    @ViewBuilder
+    private func videoRow(title: String, posts: [Post], open: @escaping (Post) -> FeedModeStart) -> some View {
         if !posts.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Recent climbs").font(.title3.bold()).padding(.horizontal)
+                Text(title).font(.title3.bold()).padding(.horizontal)
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 10) {
                         ForEach(posts) { post in
                             Button {
-                                feedModeStart = FeedModeStart(postID: post.id)
+                                feedModeStart = open(post)
                             } label: {
                                 RecentClimbCard(post: post)
                             }
@@ -147,11 +165,18 @@ struct ExploreView: View {
                     .padding(.horizontal)
                 }
             }
-            .fullScreenCover(item: $feedModeStart) { start in
-                let following = store.homeFeed().map(\.post.id)
-                FeedModeView(postIDs: following, startID: following.first ?? start.postID,
-                             showsHomeTabs: true, initialTab: .recents, recentsStartID: start.postID)
-            }
+        }
+    }
+
+    @ViewBuilder
+    private func feedMode(_ start: FeedModeStart) -> some View {
+        if start.recents {
+            // Recents tab at the tapped video; Following (the home feed) a swipe away.
+            let following = store.homeFeed().map(\.post.id)
+            FeedModeView(postIDs: following, startID: following.first ?? start.postID,
+                         showsHomeTabs: true, initialTab: .recents, recentsStartID: start.postID)
+        } else {
+            FeedModeView(postIDs: start.postIDs, startID: start.postID)
         }
     }
 
@@ -310,9 +335,12 @@ private struct ClimbCard: View {
     ExploreView().environment(AppStore.preview)
 }
 
-/// Which video to open feed mode on from Explore.
+/// Which video to open feed mode on from Explore, and through what.
 private struct FeedModeStart: Identifiable {
     let postID: Post.ID
+    /// Open on the Recents tab (else swipe through `postIDs`).
+    var recents = false
+    var postIDs: [Post.ID] = []
     var id: Post.ID { postID }
 }
 
