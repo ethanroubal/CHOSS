@@ -352,10 +352,16 @@ final class SupabaseClimbingRepository: ClimbingRepository, @unchecked Sendable 
         case .place(let id): (id, nil)
         case .climb(let id): (nil, id)
         }
-        try await client.from("community_photos").insert(PhotoInsert(
-            id: photo.id, place_id: subject.place, climb_id: subject.climb,
-            author_id: userID, storage_path: path
-        )).execute()
+        do {
+            try await client.from("community_photos").insert(PhotoInsert(
+                id: photo.id, place_id: subject.place, climb_id: subject.climb,
+                author_id: userID, storage_path: path
+            )).execute()
+        } catch {
+            // Don't leave the uploaded file behind if the photo couldn't be saved.
+            _ = try? await client.storage.from("community-photos").remove(paths: [path])
+            throw error
+        }
     }
 
     func deleteCommunityPhoto(_ photoID: CommunityPhoto.ID, by userID: User.ID) async throws {

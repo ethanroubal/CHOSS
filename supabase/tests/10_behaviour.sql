@@ -60,7 +60,8 @@ select 'search people' as check, username from search_profiles('alx', 3);
 select 'map box' as check, count(*) from places_in_box(37.5, -120, 38, -119.3);
 
 -- Photos: Sam adds one, Alex can't delete it; likes pick the cover.
-insert into community_photos (place_id, author_id, storage_path) select yosemite, sam, 'x/1.jpg' from ids;
+-- With an id, like the app (it names the file after it).
+insert into community_photos (id, place_id, author_id, storage_path) select gen_random_uuid(), yosemite, sam, 'x/1.jpg' from ids;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
 insert into community_photos (place_id, author_id, storage_path) select yosemite, alex, 'x/2.jpg' from ids;
 delete from community_photos where storage_path = 'x/1.jpg';   -- not Alex's: nothing deleted
