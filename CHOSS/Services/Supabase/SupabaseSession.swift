@@ -3,6 +3,7 @@ import Foundation
 import Observation
 import Supabase
 import CryptoKit
+import AuthenticationServices
 
 /// The signed-in state for the Supabase backend: who's signed in, and signing in / out.
 /// Supabase keeps the session in the Keychain and refreshes it, so people stay signed in.
@@ -64,6 +65,30 @@ final class SupabaseSession {
             try await self.client.auth.signInWithIdToken(
                 credentials: OpenIDConnectCredentials(provider: .apple, idToken: idToken, nonce: rawNonce)
             )
+        }
+    }
+
+    // MARK: Google
+
+    /// Where Google sign-in returns to the app. Must be listed in Supabase → Authentication →
+    /// URL Configuration → Redirect URLs.
+    static let oauthRedirectURL = URL(string: "com.choss.app://login-callback")!
+
+    /// Signs in with Google in a secure in-app browser sheet (Supabase runs the Google side).
+    /// New Google users get an account straight away, then set up their profile like anyone else.
+    func signInWithGoogle() async {
+        isWorking = true
+        errorMessage = nil
+        defer { isWorking = false }
+        do {
+            try await client.auth.signInWithOAuth(provider: .google, redirectTo: Self.oauthRedirectURL)
+        } catch {
+            // Closing the sheet isn't an error worth showing.
+            if (error as? ASWebAuthenticationSessionError)?.code == .canceledLogin { return }
+            let message = error.localizedDescription
+            errorMessage = message.localizedCaseInsensitiveContains("provider is not enabled")
+                ? "Google sign-in isn't switched on for this server yet. Use email for now."
+                : message
         }
     }
 

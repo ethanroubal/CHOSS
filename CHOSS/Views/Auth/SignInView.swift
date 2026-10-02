@@ -2,7 +2,7 @@
 import SwiftUI
 import AuthenticationServices
 
-/// First screen when signed out: Sign in with Apple, or email and password.
+/// First screen when signed out: Sign in with Apple, Google, or email and password.
 struct SignInView: View {
     @Bindable var session: SupabaseSession
     @Environment(\.colorScheme) private var colorScheme
@@ -42,6 +42,13 @@ struct SignInView: View {
                 }
                 .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
                 .frame(height: 50)
+
+                GoogleSignInButton(title: mode == .signIn ? "Sign in with Google" : "Sign up with Google") {
+                    focused = false
+                    notice = nil
+                    Task { await session.signInWithGoogle() }
+                }
+                .disabled(session.isWorking)
 
                 HStack {
                     Rectangle().frame(height: 1).foregroundStyle(.quaternary)
@@ -186,6 +193,38 @@ struct SignInView: View {
                 session.errorMessage = error.localizedDescription
             }
         }
+    }
+}
+/// Google's sign-in button: the "G" logo and label on white (light mode) or near-black
+/// (dark mode), following Google's branding guidelines, sized like the Apple button above.
+private struct GoogleSignInButton: View {
+    let title: String
+    let action: () -> Void
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        let dark = colorScheme == .dark
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image("GoogleLogo")
+                    .resizable()
+                    .frame(width: 18, height: 18)
+                Text(title)
+                    .font(.system(size: 19, weight: .medium))
+            }
+            .foregroundStyle(dark ? Color(red: 0.89, green: 0.89, blue: 0.89) : Color(red: 0.12, green: 0.12, blue: 0.12))
+            .frame(maxWidth: .infinity)
+            .frame(height: 50)
+            .background(dark ? Color(red: 0.075, green: 0.075, blue: 0.08) : .white,
+                        in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .stroke(dark ? Color(red: 0.56, green: 0.57, blue: 0.56) : Color(red: 0.45, green: 0.47, blue: 0.46),
+                            lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
     }
 }
 #endif

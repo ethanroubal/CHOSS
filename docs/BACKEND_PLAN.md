@@ -209,6 +209,12 @@ To run on the old sample data with no account, launch with `-useDemoData YES` (X
    - **Apple:** turn on the Apple provider and follow its instructions (Services ID, key from
      your Apple Developer account). In Xcode, add the **Sign in with Apple** capability to the
      CHOSS target (Signing & Capabilities → + Capability).
+   - **Google:** in Google Cloud Console (APIs & Services), set up the OAuth consent screen,
+     then create an OAuth client ID of type **Web application** with the authorized redirect
+     URI `https://<project ref>.supabase.co/auth/v1/callback`. Paste its client ID and secret
+     into Supabase → Authentication → Sign In / Providers → Google. Then under URL
+     Configuration → Redirect URLs, add `com.choss.app://login-callback` (where the app gets
+     signed in after Google).
 5. **Deploy the server functions:**
    ```sh
    supabase functions deploy delete-account
