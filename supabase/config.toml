@@ -6,3 +6,16 @@ project_id = "CHOSS"
 # the gyms and crags first, then the outdoor climbs at those crags.
 enabled = true
 sql_paths = ["./seed.sql", "./seeds/climbs_*.sql"]
+
+# Each function checks who's calling itself: create-video-upload and delete-account look up the
+# signed-in user from the request, and mux-webhook checks Mux's signature (Mux has no Supabase
+# session). So Supabase's own JWT gate is off, which also keeps working with Supabase's newer
+# JWT signing keys. A plain `supabase functions deploy` deploys all three like this.
+[functions.create-video-upload]
+verify_jwt = false
+
+[functions.delete-account]
+verify_jwt = false
+
+[functions.mux-webhook]
+verify_jwt = false

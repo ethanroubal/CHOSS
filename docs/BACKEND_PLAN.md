@@ -147,9 +147,7 @@ The local test checks that everything applies cleanly, and that:
    supabase link --project-ref <project ref>
    supabase db push                      # applies supabase/migrations
    supabase db push --include-seed       # the gyms and crags, then their climbs
-   supabase functions deploy create-video-upload
-   supabase functions deploy delete-account
-   supabase functions deploy mux-webhook --no-verify-jwt
+   supabase functions deploy             # all three (settings in supabase/config.toml)
    ```
 6. **Write a privacy policy and terms, and host them at a URL.** The App Store requires both
    for sign-up and user content.
