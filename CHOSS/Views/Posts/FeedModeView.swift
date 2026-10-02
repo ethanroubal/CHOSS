@@ -46,14 +46,21 @@ struct FeedModeView: View {
         var id: Self { self }
     }
 
-    @State private var tab: Tab = .following
+    /// The Recents video to open on (e.g. one tapped in Explore); else the newest.
+    let recentsStartID: Post.ID?
+
+    @State private var tab: Tab
     @State private var isAppeared = false
     @State private var focusID = UUID()
 
-    init(postIDs: [Post.ID], startID: Post.ID, showsHomeTabs: Bool = false) {
-        self.postIDs = postIDs.contains(startID) ? postIDs : [startID]
+    /// `postIDs` may be empty only with the home tabs (an empty Following tab).
+    init(postIDs: [Post.ID], startID: Post.ID, showsHomeTabs: Bool = false,
+         initialTab: Tab = .following, recentsStartID: Post.ID? = nil) {
+        self.postIDs = postIDs.contains(startID) || (showsHomeTabs && postIDs.isEmpty) ? postIDs : [startID]
         self.startID = startID
         self.showsHomeTabs = showsHomeTabs
+        self.recentsStartID = recentsStartID
+        _tab = State(initialValue: showsHomeTabs ? initialTab : .following)
     }
 
     /// The latest posts from everyone, newest first (only ones with a video).
@@ -69,9 +76,16 @@ struct FeedModeView: View {
                     // Swipe sideways between Following and Recents (or tap them at the top).
                     // Each tab keeps its own place; only the one on screen plays.
                     TabView(selection: $tab) {
-                        FeedModePager(postIDs: postIDs, startPageID: FeedModePage.post(startID).id,
-                                      isActive: isAppeared && tab == .following, insets: insets) { _ in }
-                            .tag(Tab.following)
+                        Group {
+                            if postIDs.isEmpty {
+                                ContentUnavailableView("Nothing here yet", systemImage: "person.2",
+                                                       description: Text("Follow gyms, crags and climbers to fill this feed."))
+                            } else {
+                                FeedModePager(postIDs: postIDs, startPageID: FeedModePage.post(startID).id,
+                                              isActive: isAppeared && tab == .following, insets: insets) { _ in }
+                            }
+                        }
+                        .tag(Tab.following)
                         recentsPage(insets: insets)
                             .tag(Tab.recents)
                     }
@@ -121,7 +135,8 @@ struct FeedModeView: View {
     private func recentsPage(insets: EdgeInsets) -> some View {
         let ids = recentIDs
         if let first = ids.first {
-            FeedModePager(postIDs: ids, startPageID: FeedModePage.post(first).id,
+            let start = recentsStartID.flatMap { ids.contains($0) ? $0 : nil } ?? first
+            FeedModePager(postIDs: ids, startPageID: FeedModePage.post(start).id,
                           isActive: isAppeared && tab == .recents, insets: insets) { _ in }
         } else {
             ContentUnavailableView("No videos yet", systemImage: "video.slash")

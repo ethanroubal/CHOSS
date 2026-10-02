@@ -11,6 +11,8 @@ struct ExploreView: View {
     }
 
     @State private var mode: Mode = .sends
+    /// A Recent climbs video was tapped: feed mode opens on it.
+    @State private var feedModeStart: FeedModeStart?
     @State private var discipline: ClimbDiscipline?
     @State private var selectedPlaceID: Place.ID?
     /// Starts over the continental US; updated as you pan / zoom.
@@ -61,6 +63,7 @@ struct ExploreView: View {
                 disciplineChips
 
                 placeCarousel(title: "Popular gyms", places: store.popularPlaceIDs(kind: .gym).prefix(15).compactMap { store.place($0) })
+                recentClimbsCarousel
                 placeCarousel(title: "Popular crags", places: store.popularPlaceIDs(kind: .crag).prefix(15).compactMap { store.place($0) })
                 climbCarousel
 
@@ -116,6 +119,38 @@ struct ExploreView: View {
                     }
                 }
                 .padding(.horizontal)
+            }
+        }
+    }
+
+    /// The newest videos (for the selected discipline). Tapping one opens feed mode on the
+    /// Recents tab at that video.
+    @ViewBuilder
+    private var recentClimbsCarousel: some View {
+        let posts: [Post] = Array(store.posts.lazy
+            .filter { $0.videoURL != nil && (discipline == nil || $0.discipline == discipline) }
+            .prefix(15))
+        if !posts.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Recent climbs").font(.title3.bold()).padding(.horizontal)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(posts) { post in
+                            Button {
+                                feedModeStart = FeedModeStart(postID: post.id)
+                            } label: {
+                                RecentClimbCard(post: post)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal)
+                }
+            }
+            .fullScreenCover(item: $feedModeStart) { start in
+                let following = store.homeFeed().map(\.post.id)
+                FeedModeView(postIDs: following, startID: following.first ?? start.postID,
+                             showsHomeTabs: true, initialTab: .recents, recentsStartID: start.postID)
             }
         }
     }
@@ -273,4 +308,52 @@ private struct ClimbCard: View {
 
 #Preview {
     ExploreView().environment(AppStore.preview)
+}
+
+/// Which video to open feed mode on from Explore.
+private struct FeedModeStart: Identifiable {
+    let postID: Post.ID
+    var id: Post.ID { postID }
+}
+
+/// A video in the Recent climbs row: its poster frame with the climb, grade and who posted it.
+private struct RecentClimbCard: View {
+    @Environment(AppStore.self) private var store
+    let post: Post
+
+    var body: some View {
+        VideoThumbnailView(post: post)
+            .frame(width: 120, height: 170)
+            // Darken the bottom so the text stays readable.
+            .overlay {
+                LinearGradient(colors: [.clear, .black.opacity(0.6)], startPoint: .center, endPoint: .bottom)
+            }
+            .overlay(alignment: .bottomLeading) {
+                VStack(alignment: .leading, spacing: 2) {
+                    if let grade = store.displayGrade(for: post) {
+                        GradeBadge(grade: grade)
+                    }
+                    Text(store.climb(post.climbID)?.name
+                         ?? (post.routeName.isEmpty ? post.discipline.displayName : post.routeName))
+                        .font(.caption.bold())
+                        .lineLimit(2)
+                    Text(store.user(post.authorID)?.username ?? "")
+                        .font(.caption2)
+                        .opacity(0.85)
+                        .lineLimit(1)
+                }
+                .foregroundStyle(.white)
+                .shadow(color: .black.opacity(0.6), radius: 3)
+                .padding(8)
+            }
+            .overlay(alignment: .topTrailing) {
+                Image(systemName: "play.fill")
+                    .font(.caption)
+                    .foregroundStyle(.white)
+                    .shadow(radius: 2)
+                    .padding(8)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
 }
