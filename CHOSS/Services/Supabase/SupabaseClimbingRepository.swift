@@ -187,8 +187,8 @@ final class SupabaseClimbingRepository: ClimbingRepository, @unchecked Sendable 
         }
     }
 
-    func recordView(postID: Post.ID, by userID: User.ID) async throws {
-        try await client.rpc("record_view", params: ["p_post": postID]).execute()
+    func recordView(postID: Post.ID, by userID: User.ID) async throws -> Int? {
+        try await client.rpc("record_view", params: ["p_post": postID]).execute().value
     }
 
     // MARK: - Comments, reposts

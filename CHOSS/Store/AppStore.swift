@@ -381,8 +381,13 @@ final class AppStore {
         guard let index = postPosition(postID), posts[index].authorID != me,
               viewedThisSession.insert("\(me)|\(postID)").inserted else { return }
         posts[index].viewCount += 1
-        perform { [repository] in
-            try await repository.recordView(postID: postID, by: me)
+        Task {
+            // Show the server's count: it includes everyone else's views since the app loaded
+            // (and a second view on the same day doesn't count).
+            if let count = try? await repository.recordView(postID: postID, by: me),
+               let index = postPosition(postID) {
+                posts[index].viewCount = count
+            }
         }
     }
 

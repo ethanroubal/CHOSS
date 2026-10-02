@@ -37,7 +37,8 @@ protocol ClimbingRepository: Sendable {
     func setFollow(userID: User.ID, following: Bool, by followerID: User.ID) async throws
     func setLike(postID: Post.ID, liked: Bool, by userID: User.ID) async throws
     /// Someone watched the video (it was on their screen).
-    func recordView(postID: Post.ID, by userID: User.ID) async throws
+    /// Returns the video's view count afterwards, if the backend knows it.
+    func recordView(postID: Post.ID, by userID: User.ID) async throws -> Int?
     func addComment(_ comment: Comment, to postID: Post.ID) async throws
     func deleteComment(_ commentID: Comment.ID, from postID: Post.ID) async throws
     /// Uploads the video (in a real backend) and persists the post, returning the stored version.

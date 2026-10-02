@@ -92,6 +92,8 @@ struct ProfileView: View {
                 ContentUnavailableView("Climber not found", systemImage: "person.fill.questionmark")
             }
         }
+        // Pull down for the latest views, likes and comments on these videos.
+        .refreshable { await store.load() }
     }
 
     private func header(_ user: User) -> some View {
