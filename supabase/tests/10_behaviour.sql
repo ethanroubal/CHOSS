@@ -26,7 +26,7 @@ insert into place_follows (user_id, place_id) select sam, yosemite from ids;
 insert into user_follows (follower_id, followee_id) select sam, alex from ids;
 insert into post_likes (post_id, user_id) select id, (select sam from ids) from posts;
 select record_view(id) from posts;
-select record_view(id) from posts;   -- same day: not counted again
+select record_view(id) from posts;   -- straight away again: counted once
 insert into posts (author_id, place_id, climb_id, discipline, send_style, proposed_grade_system, proposed_grade_value)
   select sam, yosemite, (select id from climbs where name = 'Midnight Lightning' and created_by is not null), 'boulder', 'flash', 'font', '7B+' from ids;
 do $$ begin
@@ -108,4 +108,12 @@ do $$ begin
   exception when check_violation then raise notice 'ok: links cannot propose a grade'; end;
 end $$;
 insert into posts (author_id, place_id, discipline, send_style) select alex, yosemite, 'boulder', 'other' from ids;
+reset role;
+
+-- Rewatching counts again once 10 seconds have passed.
+update post_view_last set viewed_at = now() - interval '1 minute';
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000b', false);
+select 'rewatch counts' as check, record_view(id) as views from posts where caption = 'sent!';
+select 'immediate rewatch ignored' as check, record_view(id) as views from posts where caption = 'sent!';
 reset role;

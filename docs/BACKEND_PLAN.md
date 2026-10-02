@@ -33,7 +33,7 @@ row automatically, so screens never count rows at read time.
 | Likes, reposts, follows (people and places), projects | one table each | one row per relationship, e.g. (post, user) |
 | Comments | `comments` | post, author, text |
 | Page comments | `page_comments` | a crag's / gym's or a climb's page (exactly one), author, text. Anyone can read; you add and delete only your own. |
-| Views | `posts.view_count` + `post_view_dedupe` | one view per viewer per post per day |
+| Views | `posts.view_count` + `post_view_last` | every rewatch counts; the same person's views of a video under 10 seconds apart count once |
 | **Community photos** | `community_photos`, `photo_likes` + Storage `community-photos/<user>/…` | place or climb, uploader, file path, size. Counter: likes. |
 | Avatars | Storage `avatars/<user>/…` | |
 | Grades reference | `grades` | every grade on every scale, with its rank and its comparable rank (Font → V, French / British → YDS), generated from the app so both agree |

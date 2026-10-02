@@ -370,20 +370,23 @@ final class AppStore {
         }
     }
 
-    /// "viewer|post" pairs already counted this session, so rewatching a video during one session
-    /// (scrolling back up, reopening it) counts once. A new session can count it again.
-    @ObservationIgnored private var viewedThisSession: Set<String> = []
+    /// When each video was last counted. Every rewatch counts (scrolling back to it, opening it
+    /// full screen…), but not twice within `viewRepeatInterval`, e.g. going straight from the
+    /// feed into full screen. The server applies the same rule.
+    @ObservationIgnored private var lastViewed: [Post.ID: Date] = [:]
+    private let viewRepeatInterval: TimeInterval = 10
 
     /// Logs a view: called when a video has actually been on screen (see `SendVideoPlayer`).
     /// Grids of thumbnails never call this. Your own views of your own videos don't count.
     func recordView(_ postID: Post.ID) {
         let me = currentUserID
         guard let index = postPosition(postID), posts[index].authorID != me,
-              viewedThisSession.insert("\(me)|\(postID)").inserted else { return }
+              lastViewed[postID].map({ Date.now.timeIntervalSince($0) >= viewRepeatInterval }) ?? true
+        else { return }
+        lastViewed[postID] = .now
         posts[index].viewCount += 1
         Task {
             // Show the server's count: it includes everyone else's views since the app loaded
-            // (and a second view on the same day doesn't count).
             if let count = try? await repository.recordView(postID: postID, by: me),
                let index = postPosition(postID) {
                 posts[index].viewCount = count
