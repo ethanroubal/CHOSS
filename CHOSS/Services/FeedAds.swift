@@ -73,6 +73,13 @@ final class FeedAdStore: NSObject {
         loadMoreIfNeeded()
     }
 
+    /// Forgets a range of slots (feed mode closing), so their ads aren't held on to.
+    func release(slots: Range<Int>) {
+        adsBySlot = adsBySlot.filter { !slots.contains($0.key) }
+        pendingSlots.removeAll { slots.contains($0) }
+        skippedSlots = skippedSlots.filter { !slots.contains($0) }
+    }
+
     /// The slot has scrolled onto the screen. Without an ad by now, it stays empty.
     func slotReachedScreen(_ slot: Int) {
         guard adsBySlot[slot] == nil else { return }
@@ -163,6 +170,34 @@ struct FeedAdSlot: View {
 
 /// Feed hooks for loading ads early: when the feed opens, and a few posts before each slot.
 extension FeedAds {
+    /// Whether the slot has an ad to show.
+    @MainActor static func hasAd(slot: Int) -> Bool {
+        #if canImport(GoogleMobileAds)
+        FeedAdStore.shared.ad(forSlot: slot) != nil
+        #else
+        false
+        #endif
+    }
+
+    @MainActor static func prepare(slot: Int) {
+        #if canImport(GoogleMobileAds)
+        FeedAdStore.shared.prepare(slot: slot)
+        #endif
+    }
+
+    @MainActor static func slotReachedScreen(_ slot: Int) {
+        #if canImport(GoogleMobileAds)
+        FeedAdStore.shared.slotReachedScreen(slot)
+        #endif
+    }
+
+    /// Feed mode closed: drop its slots.
+    @MainActor static func releaseFeedModeSlots(from base: Int) {
+        #if canImport(GoogleMobileAds)
+        FeedAdStore.shared.release(slots: base..<(base + 1_000))
+        #endif
+    }
+
     /// How many posts ahead of a slot its ad is requested.
     static let lookahead = 3
 
@@ -179,6 +214,25 @@ extension FeedAds {
         let nextSlot = (index + lookahead) / interval - 1
         if nextSlot >= 0 { FeedAdStore.shared.prepare(slot: nextSlot) }
         #endif
+    }
+}
+
+/// A sponsored page in feed mode: the ad card in the middle of a black page.
+struct FeedModeAdPage: View {
+    let slot: Int
+    let insets: EdgeInsets
+
+    var body: some View {
+        ZStack {
+            Color.black
+            #if canImport(GoogleMobileAds)
+            if let ad = FeedAdStore.shared.ad(forSlot: slot) {
+                NativeAdCard(ad: ad)
+                    .padding(.top, insets.top + 44)
+                    .padding(.bottom, insets.bottom)
+            }
+            #endif
+        }
     }
 }
 

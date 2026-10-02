@@ -224,6 +224,7 @@ struct PlaceDetailView: View {
                         Divider()
                     }
                 }
+                .environment(\.videoFeedPostIDs, filtered.map(\.id))
             }
         }
     }

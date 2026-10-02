@@ -249,6 +249,7 @@ struct PostFeedView: View {
                         .id(post.id)
                     }
                 }
+                .environment(\.videoFeedPostIDs, feed.postIDs)
             }
             .opacity(isPositioned ? 1 : 0)
             // Open on the post that was tapped (an initial `.scrollPosition` was sometimes ignored

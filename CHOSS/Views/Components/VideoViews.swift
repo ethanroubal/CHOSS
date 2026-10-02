@@ -274,7 +274,7 @@ final class VideoFocus {
 }
 
 /// Plain video surface with no system controls (taps are handled by `SendVideoPlayer`).
-private struct PlayerSurface: UIViewRepresentable {
+struct PlayerSurface: UIViewRepresentable {
     let player: AVPlayer
     /// Fill (crop) inline; fit (whole frame, letterboxed) full screen.
     var gravity: AVLayerVideoGravity = .resizeAspectFill
@@ -323,9 +323,12 @@ struct SendVideoPlayer: View {
     /// False while another screen is pushed on top (the view stays in the hierarchy but hidden).
     @State private var isAppeared = false
     @State private var isPausedByUser = false
+    /// Feed mode (full-screen, swipe-through videos) is open from this video.
     @State private var isFullScreen = false
     /// Where to pick up after full screen (used if the inline player was unloaded meanwhile).
     @State private var resumeAt: Double?
+    /// The list this video is in, for feed mode to carry on through.
+    @Environment(\.videoFeedPostIDs) private var feedPostIDs
     @Environment(\.scenePhase) private var scenePhase
 
     /// 4:5 at full width, but never more than about half the screen's height.
@@ -359,27 +362,14 @@ struct SendVideoPlayer: View {
             .contentShape(Rectangle())
             // Double-tap is declared first so a single tap waits to see if a second one follows.
             .onTapGesture(count: 2) { onDoubleTap() }
+            // A tap opens feed mode: this video full screen, then swipe through the rest.
             .onTapGesture {
-                withAnimation(.easeOut(duration: 0.15)) { isPausedByUser.toggle() }
-                updatePlayback()
+                guard post.videoURL != nil else { return }
+                rememberPosition()  // feed mode carries on from here
+                isFullScreen = true
             }
             .accessibilityAddTraits(.isButton)
-            .accessibilityLabel(isPausedByUser ? "Play video" : "Pause video")
-            .overlay(alignment: .topTrailing) {
-                if post.videoURL != nil {
-                    Button {
-                        isFullScreen = true
-                    } label: {
-                        Image(systemName: "arrow.up.left.and.arrow.down.right")
-                            .font(.footnote.bold())
-                            .foregroundStyle(.white)
-                            .frame(width: 30, height: 30)
-                            .background(.black.opacity(0.55), in: Circle())
-                    }
-                    .padding(10)
-                    .accessibilityLabel("Full screen")
-                }
-            }
+            .accessibilityLabel("Open video full screen")
             .overlay(alignment: .bottomTrailing) {
                 if post.videoURL != nil {
                     Button {
@@ -407,14 +397,14 @@ struct SendVideoPlayer: View {
                     .padding(.horizontal, 10)
                 }
             }
-            .fullScreenCover(isPresented: $isFullScreen, onDismiss: updatePlayback) {
-                FullScreenVideoView(post: post, startAt: playback.currentSeconds,
-                                    onDoubleTap: onDoubleTap) { seconds in
-                    // Carry on inline from where full screen left off.
-                    resumeAt = seconds
-                    store.setPlaybackPosition(seconds, of: post.id)
+            .fullScreenCover(isPresented: $isFullScreen, onDismiss: {
+                // Carry on inline from where feed mode left this video.
+                if let seconds = store.playbackPosition(of: post.id), playback.isReady {
                     playback.seek(to: seconds)
                 }
+                updatePlayback()
+            }) {
+                FeedModeView(postIDs: feedPostIDs ?? [post.id], startID: post.id)
             }
             .onChange(of: isFullScreen) { _, _ in
                 reportFocus()
@@ -499,219 +489,6 @@ struct SendVideoPlayer: View {
             if isPausedByUser { playback.pause() } else { playback.play() }
         } else {
             playback.pause()
-        }
-    }
-}
-
-/// A send video full screen: the whole frame on black, looping with sound, starting where the
-/// inline video was. Tap to pause, double-tap to like / unlike, drag the timeline at the bottom
-/// to jump around, swipe down or tap the X to close.
-///
-/// Pinch to zoom (up to 6×) around your fingers and drag to look around, like Photos. Letting go
-/// below 1× springs back; the view never pans past the video's edges. Swipe-down-to-close only
-/// works when not zoomed in, so dragging a zoomed video doesn't close it.
-struct FullScreenVideoView: View {
-    @Environment(AppStore.self) private var store
-    @Environment(\.dismiss) private var dismiss
-    let post: Post
-    /// Seconds into the video to start at.
-    var startAt: Double = 0
-    var onDoubleTap: () -> Void = {}
-    /// Called on close with where the video got to.
-    var onClose: (Double) -> Void = { _ in }
-
-    @AppStorage("videosMuted") private var isMuted = false
-    @StateObject private var playback = LoopingPlayback()
-    @State private var isPaused = false
-    @State private var dragOffset: CGFloat = 0
-    @State private var likeBurst = 0
-    @State private var focusID = UUID()
-
-    // Zoom: the committed state, plus the last gesture values so each frame applies only the
-    // change since the previous one (no jumps when a finger lifts or lands mid-gesture).
-    @State private var zoom: CGFloat = 1
-    @State private var pan: CGSize = .zero
-    @State private var lastMagnification: CGFloat = 1
-    @State private var lastDrag: CGSize = .zero
-    @State private var containerSize: CGSize = .zero
-
-    private static let maxZoom: CGFloat = 6
-    private var isZoomed: Bool { zoom > 1.01 }
-
-    var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-            PlayerSurface(player: playback.player, gravity: .resizeAspect)
-                .opacity(playback.isReady ? 1 : 0)
-                .ignoresSafeArea()
-                .scaleEffect(zoom)
-                .offset(pan)
-            if isPaused {
-                Image(systemName: "play.fill")
-                    .font(.system(size: 56))
-                    .foregroundStyle(.white.opacity(0.9))
-                    .shadow(radius: 6)
-            }
-            LikeBurst(trigger: likeBurst)
-        }
-        .offset(y: dragOffset)
-        .contentShape(Rectangle())
-        .onGeometryChange(for: CGSize.self) { $0.size } action: { containerSize = $0 }
-        .onTapGesture(count: 2) { onDoubleTap() }
-        .onTapGesture {
-            isPaused.toggle()
-            if isPaused { playback.pause() } else { playback.play() }
-        }
-        .gesture(SimultaneousGesture(pinchGesture, dragGesture))
-        .overlay(alignment: .topLeading) {
-            if isZoomed {
-                Button {
-                    withAnimation(.spring(response: 0.3)) {
-                        zoom = 1
-                        pan = .zero
-                    }
-                } label: {
-                    Text("1×")
-                        .font(.footnote.bold())
-                        .foregroundStyle(.white)
-                        .frame(width: 36, height: 36)
-                        .background(.black.opacity(0.55), in: Circle())
-                }
-                .padding()
-                .accessibilityLabel("Reset zoom")
-                .transition(.opacity)
-            }
-        }
-        .animation(.easeOut(duration: 0.15), value: isZoomed)
-        .overlay(alignment: .topTrailing) {
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.body.bold())
-                    .foregroundStyle(.white)
-                    .frame(width: 36, height: 36)
-                    .background(.black.opacity(0.55), in: Circle())
-            }
-            .padding()
-            .accessibilityLabel("Close")
-        }
-        .overlay(alignment: .bottom) {
-            VStack(alignment: .trailing, spacing: 8) {
-                Button {
-                    isMuted.toggle()
-                } label: {
-                    Image(systemName: isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                        .font(.body.bold())
-                        .foregroundStyle(.white)
-                        .frame(width: 36, height: 36)
-                        .background(.black.opacity(0.55), in: Circle())
-                }
-                .accessibilityLabel(isMuted ? "Unmute" : "Mute")
-
-                VideoScrubber(progress: playback.progress) { seconds in
-                    playback.seek(to: seconds)
-                } onScrubbingChanged: { scrubbing in
-                    playback.isScrubbing = scrubbing
-                    if scrubbing {
-                        playback.pause()
-                    } else if !isPaused {
-                        playback.play()
-                    }
-                }
-            }
-            .padding(.horizontal)
-            .padding(.bottom, 4)
-        }
-        .statusBarHidden()
-        .onAppear {
-            // Only this video plays while it's open.
-            VideoFocus.shared.beginExclusive(focusID)
-            guard let url = post.videoURL else { return }
-            playback.load(url, startAt: startAt)
-            playback.player.isMuted = isMuted
-            playback.play()
-        }
-        .onDisappear {
-            VideoFocus.shared.endExclusive(focusID)
-            onClose(playback.currentSeconds)
-            playback.unload()
-        }
-        .onChange(of: isMuted) { _, muted in playback.player.isMuted = muted }
-        .task {
-            // Opened partway through (carrying on from the feed): the same view continues.
-            guard startAt < 0.5 else { return }
-            try? await Task.sleep(for: .seconds(1))
-            if !Task.isCancelled { store.recordView(post.id) }
-        }
-        .onChange(of: store.isLiked(post.id)) { _, liked in
-            if liked { likeBurst += 1 }
-        }
-    }
-
-    // MARK: Zoom
-
-    /// Pinch: zoom around the point between your fingers (it stays under them).
-    private var pinchGesture: some Gesture {
-        MagnifyGesture()
-            .onChanged { value in
-                let factor = value.magnification / lastMagnification
-                lastMagnification = value.magnification
-                let newZoom = min(max(zoom * factor, 0.8), Self.maxZoom)
-                let applied = newZoom / zoom
-                // Pinch point relative to the center; keep the video point under it fixed.
-                let anchor = CGSize(width: value.startLocation.x - containerSize.width / 2,
-                                    height: value.startLocation.y - containerSize.height / 2)
-                pan = CGSize(width: anchor.width - (anchor.width - pan.width) * applied,
-                             height: anchor.height - (anchor.height - pan.height) * applied)
-                zoom = newZoom
-            }
-            .onEnded { _ in
-                lastMagnification = 1
-                settleZoom()
-            }
-    }
-
-    /// Drag: look around when zoomed in; otherwise swipe down to close.
-    private var dragGesture: some Gesture {
-        DragGesture(minimumDistance: 10)
-            .onChanged { value in
-                let delta = CGSize(width: value.translation.width - lastDrag.width,
-                                   height: value.translation.height - lastDrag.height)
-                lastDrag = value.translation
-                if isZoomed {
-                    dragOffset = 0  // a pinch that started at 1× may have nudged it
-                    pan = CGSize(width: pan.width + delta.width, height: pan.height + delta.height)
-                } else {
-                    dragOffset = max(value.translation.height, 0)
-                }
-            }
-            .onEnded { value in
-                lastDrag = .zero
-                if isZoomed {
-                    settleZoom()
-                } else if value.translation.height > 120 {
-                    dismiss()
-                } else {
-                    withAnimation(.spring(response: 0.3)) { dragOffset = 0 }
-                }
-            }
-    }
-
-    /// Springs back to 1× if zoomed out too far, and keeps the zoomed video covering the screen
-    /// (no panning past its edges).
-    private func settleZoom() {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-            dragOffset = 0
-            if zoom <= 1.01 {
-                zoom = 1
-                pan = .zero
-            } else {
-                let maxX = containerSize.width * (zoom - 1) / 2
-                let maxY = containerSize.height * (zoom - 1) / 2
-                pan = CGSize(width: min(max(pan.width, -maxX), maxX),
-                             height: min(max(pan.height, -maxY), maxY))
-            }
         }
     }
 }

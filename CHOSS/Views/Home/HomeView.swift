@@ -33,6 +33,8 @@ struct HomeView: View {
                             }
                         }
                     }
+                    // Tapping a video opens feed mode through these posts.
+                    .environment(\.videoFeedPostIDs, feed.map(\.post.id))
                     BrandFooter(message: "You're all caught up")
                 }
             }
