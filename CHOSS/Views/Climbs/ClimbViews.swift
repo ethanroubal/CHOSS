@@ -206,18 +206,23 @@ struct ClimbDetailView: View {
                 StatView(value: Set(sends.map(\.authorID)).count, label: "Climbers")
                 StatView(value: sendCount, label: "Sends")
             }
-            // The climb's grade is the community's: the average of everyone's proposed grades.
-            Group {
-                if let average {
-                    Text(average.count == 1
-                         ? "Grade from 1 climber's proposal"
-                         : "Grade is the average of \(average.count) climbers' proposals")
-                } else {
-                    Text("No proposed grades yet. Post a send to propose one.")
+            // The climb's grade is the community's: the average of the grades proposed when
+            // people post their sends.
+            if let average {
+                HStack(spacing: 6) {
+                    Text("Community grade")
+                    GradeBadge(grade: average.grade)
+                    Text(average.count == 1 ? "· from 1 climber" : "· from \(average.count) climbers")
                 }
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Community grade \(average.grade.value), from \(average.count) \(average.count == 1 ? "climber" : "climbers")")
+            } else {
+                Text("No community grade yet. Post a send to add yours.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
             if let guidebook = climb.grade, guidebook != average?.grade {
                 HStack(spacing: 6) {
                     Text("Guidebook grade")
@@ -225,6 +230,8 @@ struct ClimbDetailView: View {
                         .foregroundStyle(.secondary)
                     GradeBadge(grade: guidebook, isProposed: true)
                 }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Guidebook grade \(guidebook.value)")
             }
         }
         .padding(.horizontal)
