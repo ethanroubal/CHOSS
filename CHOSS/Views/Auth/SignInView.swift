@@ -19,9 +19,20 @@ struct SignInView: View {
     @State private var password = ""
     @State private var nonce = ""
     @State private var notice: String?
+    @State private var showingForgotPassword = false
     @FocusState private var focused: Bool
 
     var body: some View {
+        NavigationStack {
+            form
+                .toolbar(.hidden, for: .navigationBar)
+                .navigationDestination(isPresented: $showingForgotPassword) {
+                    ForgotPasswordView(session: session, initialEmail: email)
+                }
+        }
+    }
+
+    private var form: some View {
         ScrollView {
             VStack(spacing: 24) {
                 VStack(spacing: 12) {
@@ -100,13 +111,13 @@ struct SignInView: View {
 
                     if mode == .signIn {
                         Button("Forgot password?") {
-                            Task {
-                                await session.sendPasswordReset(email: email)
-                                if session.errorMessage == nil { notice = "Check your email for a reset link." }
-                            }
+                            focused = false
+                            session.errorMessage = nil
+                            notice = nil
+                            showingForgotPassword = true
                         }
                         .font(.footnote)
-                        .disabled(email.isEmpty || session.isWorking)
+                        .disabled(session.isWorking)
                     }
                 }
 
@@ -203,6 +214,118 @@ struct SignInView: View {
         }
     }
 }
+/// "Forgot password?": enter your email and tap Reset Password; then a page confirms the link
+/// was sent. The back arrow returns to sign in from either step.
+private struct ForgotPasswordView: View {
+    @Bindable var session: SupabaseSession
+    @State private var email: String
+    @State private var problem: String?
+    /// Where the link was sent (shows the confirmation page).
+    @State private var sentTo: String?
+    @FocusState private var focused: Bool
+
+    init(session: SupabaseSession, initialEmail: String) {
+        self.session = session
+        _email = State(initialValue: initialEmail.trimmingCharacters(in: .whitespaces))
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                if let sentTo {
+                    Image(systemName: "envelope.badge.fill")
+                        .font(.system(size: 52))
+                        .foregroundStyle(.tint)
+                        .padding(.top, 40)
+                    Text("Password reset link sent to \(sentTo)")
+                        .font(.title3.bold())
+                        .multilineTextAlignment(.center)
+                    Text("Open the email on this phone and tap the link to choose a new password. "
+                         + "If it's not there, check your spam folder.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                } else {
+                    Image(systemName: "lock.rotation")
+                        .font(.system(size: 48))
+                        .foregroundStyle(.tint)
+                        .padding(.top, 40)
+                    VStack(spacing: 6) {
+                        Text("Forgot your password?").font(.title2.bold())
+                        Text("Enter your account's email and we'll send you a link to reset it.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    TextField("Email", text: $email)
+                        .textContentType(.emailAddress)
+                        .keyboardType(.emailAddress)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .submitLabel(.send)
+                        .focused($focused)
+                        .onSubmit(send)
+                        .padding(12)
+                        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
+
+                    Button(action: send) {
+                        Group {
+                            if session.isWorking {
+                                ProgressView().tint(Brand.onAccent)
+                            } else {
+                                Text("Reset Password").bold().foregroundStyle(Brand.onAccent)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 34)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(session.isWorking)
+
+                    if let message = problem ?? session.errorMessage {
+                        Label(message, systemImage: "exclamationmark.triangle.fill")
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                            .multilineTextAlignment(.center)
+                    }
+                }
+            }
+            .padding(.horizontal, 24)
+            .frame(maxWidth: 440)
+            .frame(maxWidth: .infinity)
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .navigationTitle(sentTo == nil ? "Reset password" : "Check your email")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            session.errorMessage = nil
+            if email.isEmpty { focused = true }
+        }
+        .onDisappear { session.errorMessage = nil }
+    }
+
+    private func send() {
+        focused = false
+        problem = nil
+        session.errorMessage = nil
+        let trimmed = email.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else {
+            problem = "Enter your email."
+            return
+        }
+        guard trimmed.contains("@"), trimmed.contains(".") else {
+            problem = "That email doesn't look right."
+            return
+        }
+        Task {
+            await session.sendPasswordReset(email: trimmed)
+            if session.errorMessage == nil {
+                withAnimation { sentTo = trimmed }
+            }
+        }
+    }
+}
+
 /// Google's sign-in button: the "G" logo and label on white (light mode) or near-black
 /// (dark mode), following Google's branding guidelines, sized like the Apple button above.
 private struct GoogleSignInButton: View {
