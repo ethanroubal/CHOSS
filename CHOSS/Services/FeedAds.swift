@@ -131,7 +131,8 @@ struct FeedAdSlot: View {
 
 #if canImport(GoogleMobileAds)
 /// Google's native ad view laid out like a post: advertiser row, media, text, button.
-/// Google draws its AdChoices icon in a corner; the "Sponsored" label is required.
+/// Google draws its AdChoices icon in a corner; the "Sponsored" badge is required. Asset views
+/// show the ad's own text exactly, and are hidden when the ad has none.
 private struct NativeAdCard: UIViewRepresentable {
     let ad: NativeAd
 
@@ -150,11 +151,23 @@ private struct NativeAdCard: UIViewRepresentable {
         headline.font = .preferredFont(forTextStyle: .subheadline).bold
         headline.numberOfLines = 1
 
-        let sponsored = UILabel()
-        sponsored.font = .preferredFont(forTextStyle: .caption1)
-        sponsored.textColor = .secondaryLabel
+        // The ad badge is our own label, not an asset view: asset views must show exactly the
+        // ad's text (Google's native ad validator flags anything added to them).
+        let badge = UILabel()
+        badge.text = "Sponsored"
+        badge.font = .preferredFont(forTextStyle: .caption1).bold
+        badge.textColor = .secondaryLabel
+        badge.setContentHuggingPriority(.required, for: .horizontal)
 
-        let titles = UIStackView(arrangedSubviews: [headline, sponsored])
+        let advertiser = UILabel()
+        advertiser.font = .preferredFont(forTextStyle: .caption1)
+        advertiser.textColor = .secondaryLabel
+        advertiser.numberOfLines = 1
+
+        let subtitle = UIStackView(arrangedSubviews: [badge, advertiser])
+        subtitle.spacing = 6
+
+        let titles = UIStackView(arrangedSubviews: [headline, subtitle])
         titles.axis = .vertical
         titles.spacing = 1
 
@@ -202,7 +215,7 @@ private struct NativeAdCard: UIViewRepresentable {
 
         adView.iconView = icon
         adView.headlineView = headline
-        adView.advertiserView = sponsored
+        adView.advertiserView = advertiser
         adView.mediaView = media
         adView.bodyView = body
         adView.callToActionView = button
@@ -225,13 +238,15 @@ private struct NativeAdCard: UIViewRepresentable {
 
     private func configure(_ adView: NativeAdView) {
         (adView.headlineView as? UILabel)?.text = ad.headline
-        (adView.advertiserView as? UILabel)?.text = ["Sponsored", ad.advertiser].compactMap { $0 }.joined(separator: " · ")
+        (adView.advertiserView as? UILabel)?.text = ad.advertiser
+        adView.advertiserView?.isHidden = ad.advertiser == nil
         (adView.iconView as? UIImageView)?.image = ad.icon?.image
         adView.iconView?.isHidden = ad.icon == nil
         adView.mediaView?.mediaContent = ad.mediaContent
         (adView.bodyView as? UILabel)?.text = ad.body
         adView.bodyView?.isHidden = ad.body == nil
-        (adView.callToActionView as? UIButton)?.configuration?.title = ad.callToAction ?? "Learn more"
+        (adView.callToActionView as? UIButton)?.configuration?.title = ad.callToAction
+        adView.callToActionView?.isHidden = ad.callToAction == nil
         // Last, so the SDK sees the filled-in views (it tracks impressions and clicks on them).
         adView.nativeAd = ad
     }
