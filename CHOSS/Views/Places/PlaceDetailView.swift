@@ -83,9 +83,10 @@ struct PlaceDetailView: View {
                 ContentUnavailableView("Place not found", systemImage: "mappin.slash")
             }
         }
-        // Open at the top. (Scrolling programmatically to the header aligned it under the
-        // navigation bar, cutting off the top of the page, so the page just anchors to the top.)
-        .defaultScrollAnchor(.top)
+        // No `.defaultScrollAnchor(.top)` (or programmatic scrolling): when the page's content
+        // grew after opening (climbs, comments, legends loading in), the anchor re-pinned the
+        // page with its top under the navigation bar, where nothing could be tapped. A plain
+        // scroll view already opens at the top and stays put as content loads below.
         // Pull down to load sends (and photos, climbs…) posted since the page opened.
         .refreshable {
             await store.load()
