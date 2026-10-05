@@ -1,6 +1,7 @@
 // Starts posting a send: creates the post (hidden until its video is ready) and a Mux direct
-// upload URL. The app uploads the video file straight to Mux with that URL (a background
-// upload, so it survives the app being closed); Mux transcodes it and calls mux-webhook.
+// upload URL. The app uploads the video file straight to Mux with that URL (it keeps going for
+// a while if the app is put in the background); Mux transcodes it and calls mux-webhook.
+// Uploads abandoned for a day are cleaned up by media-cleanup.
 //
 // Request (signed in):  POST { placeId?, climbId?, routeName?, discipline, sendStyle,
 //                              proposedGradeSystem?, proposedGradeValue?, caption? }

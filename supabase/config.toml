@@ -19,3 +19,7 @@ verify_jwt = false
 
 [functions.mux-webhook]
 verify_jwt = false
+
+# Called hourly by pg_cron with a shared secret header (see migrations/…_media_cleanup.sql).
+[functions.media-cleanup]
+verify_jwt = false

@@ -124,3 +124,23 @@ set role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
 select 'own view counts' as check, record_view(id) as views from posts where caption = 'sent!';
 reset role;
+
+-- Media cleanup: deleted posts queue their Mux video, replaced avatars queue the old file,
+-- and day-old unfinished uploads are swept.
+insert into posts (author_id, place_id, discipline, send_style, mux_upload_id, mux_asset_id, video_status, caption)
+  select alex, yosemite, 'boulder', 'redpoint', 'upload-gone', 'asset-gone', 'ready', 'to delete' from ids;
+insert into posts (author_id, place_id, discipline, send_style, mux_upload_id, created_at)
+  select alex, yosemite, 'boulder', 'redpoint', 'upload-stuck', now() - interval '2 days' from ids;
+set role authenticated;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', false);
+select delete_post(id) from posts where caption = 'to delete';
+update profiles set avatar_path = '00000000-0000-0000-0000-00000000000a/old.jpg' where id = (select alex from ids);
+update profiles set avatar_path = '00000000-0000-0000-0000-00000000000a/new.jpg' where id = (select alex from ids);
+do $$ begin
+  begin perform * from mux_cleanup; raise exception 'LEAK: app can read mux_cleanup';
+  exception when insufficient_privilege then raise notice 'ok: cleanup queues are server-only'; end;
+end $$;
+reset role;
+select 'stale uploads swept' as check, sweep_stale_uploads() as swept;
+select 'mux cleanup queue' as check, kind, mux_id from mux_cleanup order by kind, mux_id;
+select 'storage cleanup queue' as check, bucket, path from storage_cleanup order by path;

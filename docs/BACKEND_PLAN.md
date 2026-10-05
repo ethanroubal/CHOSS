@@ -105,6 +105,8 @@ full screen.
 | `supabase/migrations/20261001000200_storage.sql` | Picture buckets and their upload / delete rules |
 | `supabase/migrations/20261001000400_climb_sources.sql` | Climbs' source id and location |
 | `supabase/migrations/20261001000500_page_comments.sql` | Comments on crag / gym / climb pages |
+| `supabase/migrations/20261005000000_media_cleanup.sql` | Queues media to remove (deleted posts' Mux videos, replaced profile pictures, day-old abandoned uploads) and schedules `media-cleanup` hourly |
+| `supabase/functions/media-cleanup` | Removes the queued media from Mux and Storage (needs `CLEANUP_SECRET`) |
 | `supabase/seed.sql` | The 3,663 gyms and crags (generated) |
 | `supabase/seeds/climbs_*.sql` | The 205,546 outdoor climbs, each at its crag (generated) |
 | `supabase/config.toml` | Tells the CLI to run both seeds, in order |

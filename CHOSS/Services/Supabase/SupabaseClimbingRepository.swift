@@ -1,5 +1,6 @@
 #if canImport(Supabase)
 import Foundation
+import UIKit
 import Supabase
 
 /// `ClimbingRepository` backed by Supabase (see supabase/migrations and docs/BACKEND_PLAN.md).
@@ -232,6 +233,19 @@ final class SupabaseClimbingRepository: ClimbingRepository, @unchecked Sendable 
         var put = URLRequest(url: uploadURL)
         put.httpMethod = "PUT"
         put.setValue("video/mp4", forHTTPHeaderField: "Content-Type")
+        // Ask iOS for extra time so leaving the app mid-upload doesn't cut it off (a few minutes
+        // at most; an upload that never finishes is cleaned up on the server after a day).
+        let backgroundTask = await MainActor.run { () -> UIBackgroundTaskIdentifier in
+            var id = UIBackgroundTaskIdentifier.invalid
+            // If time runs out, end the task (iOS stops the app otherwise); the upload just stops.
+            id = UIApplication.shared.beginBackgroundTask(withName: "Upload video") {
+                UIApplication.shared.endBackgroundTask(id)
+            }
+            return id
+        }
+        defer {
+            Task { @MainActor in UIApplication.shared.endBackgroundTask(backgroundTask) }
+        }
         let (_, response) = try await URLSession.shared.upload(for: put, fromFile: videoURL)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw BackendError.uploadFailed
