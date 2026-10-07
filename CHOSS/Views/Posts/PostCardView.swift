@@ -297,6 +297,27 @@ struct PostDetailView: View {
 
 /// 3-column grid of video thumbnails, like an Instagram profile. Tapping one opens a
 /// scrollable feed of this grid's posts, starting at the tapped one.
+/// "▶ 1.2K" on a video thumbnail: how many times it's been watched.
+struct ViewCountBadge: View {
+    let count: Int
+
+    var body: some View {
+        Label {
+            Text(count.formatted(.number.notation(.compactName)))
+        } icon: {
+            Image(systemName: "play.fill")
+        }
+        .labelStyle(.titleAndIcon)
+        .font(.caption2.bold())
+        .foregroundStyle(.white)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(.black.opacity(0.5), in: Capsule())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(count) \(count == 1 ? "view" : "views")")
+    }
+}
+
 struct PostGrid: View {
     /// What each thumbnail shows in its corner.
     enum Badge {
@@ -326,6 +347,10 @@ struct PostGrid: View {
                         // Taps land only on the tile itself: a tall thumbnail's cropped-off overflow
                         // mustn't catch taps meant for what's above (e.g. the sort picker).
                         .contentShape(Rectangle())
+                        // Views, Instagram-style: bottom left (bottom right when likes are there).
+                        .overlay(alignment: badge == .likes ? .bottomTrailing : .bottomLeading) {
+                            ViewCountBadge(count: post.viewCount).padding(5)
+                        }
                         .overlay(alignment: badge == .grade ? .topTrailing : .bottomLeading) {
                             switch badge {
                             case .grade:

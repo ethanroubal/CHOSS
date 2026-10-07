@@ -374,11 +374,7 @@ private struct RecentClimbCard: View {
                 .padding(8)
             }
             .overlay(alignment: .topTrailing) {
-                Image(systemName: "play.fill")
-                    .font(.caption)
-                    .foregroundStyle(.white)
-                    .shadow(radius: 2)
-                    .padding(8)
+                ViewCountBadge(count: post.viewCount).padding(6)
             }
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
