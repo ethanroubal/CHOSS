@@ -19,8 +19,10 @@ enum FeedAds {
 /// scrolling back shows the same one.
 ///
 /// Ads are loaded before they're needed (when the feed opens, then topping up), and a slot gets
-/// its ad a few posts before you reach it. A slot that reaches the screen without an ad stays
-/// empty for the session: an ad never pops in under your finger and shifts the feed.
+/// its ad a few posts before you reach it. An ad is never put into a slot while it's on screen
+/// (it would shift the feed under your finger) or once you've scrolled past it; a slot that's
+/// waiting gets its ad as soon as one loads while it's still below the screen. Failed loads are
+/// retried with a growing pause, so a spell offline (or a VPN) doesn't turn ads off for good.
 @MainActor
 @Observable
 final class FeedAdStore: NSObject {
@@ -32,10 +34,13 @@ final class FeedAdStore: NSObject {
     @ObservationIgnored private var spare: [NativeAd] = []
     /// Slots coming up that still need an ad (given one as soon as it loads).
     @ObservationIgnored private var pendingSlots: [Int] = []
-    /// Slots that reached the screen without an ad: left empty.
-    @ObservationIgnored private var skippedSlots: Set<Int> = []
+    /// Slots on screen right now (an ad isn't put in while you're looking at the spot).
+    @ObservationIgnored private var visibleSlots: Set<Int> = []
+    /// Slots scrolled past without an ad: left empty (filling one would shift the feed).
+    @ObservationIgnored private var passedSlots: Set<Int> = []
     @ObservationIgnored private var loader: AdLoader?
     @ObservationIgnored private var failures = 0
+    @ObservationIgnored private var retryTask: Task<Void, Never>?
     /// Ads kept loaded and ready.
     private let spareTarget = 2
 
@@ -63,9 +68,9 @@ final class FeedAdStore: NSObject {
     /// The feed is a few posts away from this slot: give it an ad now if one is ready, otherwise
     /// as soon as one loads (while it's still off screen).
     func prepare(slot: Int) {
-        guard adsBySlot[slot] == nil, !skippedSlots.contains(slot), !pendingSlots.contains(slot) else { return }
-        if !spare.isEmpty {
-            adsBySlot[slot] = spare.removeFirst()
+        guard adsBySlot[slot] == nil, !passedSlots.contains(slot), !pendingSlots.contains(slot) else { return }
+        if !spare.isEmpty, !visibleSlots.contains(slot) {
+            assign(spare.removeFirst(), to: slot)
         } else {
             pendingSlots.append(slot)
             pendingSlots.sort()
@@ -73,23 +78,52 @@ final class FeedAdStore: NSObject {
         loadMoreIfNeeded()
     }
 
+    /// Where a home-feed slot is relative to the screen.
+    enum SlotPosition { case below, onScreen, above }
+
+    /// Tracks a slot as the feed scrolls: below the screen it can still get an ad; on screen it
+    /// waits; scrolled past (above) without an ad, it stays empty.
+    func slot(_ slot: Int, movedTo position: SlotPosition) {
+        switch position {
+        case .onScreen:
+            visibleSlots.insert(slot)
+        case .below:
+            visibleSlots.remove(slot)
+            if adsBySlot[slot] == nil, pendingSlots.contains(slot), !spare.isEmpty {
+                pendingSlots.removeAll { $0 == slot }
+                assign(spare.removeFirst(), to: slot)
+            }
+        case .above:
+            visibleSlots.remove(slot)
+            slotReachedScreen(slot)
+        }
+    }
+
+    private func assign(_ ad: NativeAd, to slot: Int) {
+        adsBySlot[slot] = ad
+        print("[Ads] Feed ad ready for slot \(slot).")
+    }
+
     /// Forgets a range of slots (feed mode closing), so their ads aren't held on to.
     func release(slots: Range<Int>) {
         adsBySlot = adsBySlot.filter { !slots.contains($0.key) }
         pendingSlots.removeAll { slots.contains($0) }
-        skippedSlots = skippedSlots.filter { !slots.contains($0) }
+        visibleSlots = visibleSlots.filter { !slots.contains($0) }
+        passedSlots = passedSlots.filter { !slots.contains($0) }
     }
 
-    /// The slot has scrolled onto the screen. Without an ad by now, it stays empty.
+    /// The slot has been scrolled past. Without an ad by now, it stays empty.
     func slotReachedScreen(_ slot: Int) {
-        guard adsBySlot[slot] == nil else { return }
-        skippedSlots.insert(slot)
+        guard adsBySlot[slot] == nil, !passedSlots.contains(slot) else { return }
+        passedSlots.insert(slot)
         pendingSlots.removeAll { $0 == slot }
+        print("[Ads] Feed slot \(slot) scrolled past before an ad loaded; left empty.")
     }
 
     private func loadMoreIfNeeded() {
-        // Keep a couple of ads ready; stop retrying after a few failures (ad blocker, no fill…).
-        guard loader == nil, spare.count < spareTarget || !pendingSlots.isEmpty, failures < 3,
+        // Keep a couple of ads ready (and one per waiting slot). After a failure, the retry
+        // waits (see `failed`); nothing else starts a load meanwhile.
+        guard loader == nil, retryTask == nil, spare.count < spareTarget || !pendingSlots.isEmpty,
               let unitID = Self.adUnitID else { return }
         let options = MultipleAdsAdLoaderOptions()
         options.numberOfAds = 3
@@ -101,8 +135,9 @@ final class FeedAdStore: NSObject {
 
     private func received(_ ad: NativeAd) {
         failures = 0
-        if !pendingSlots.isEmpty {
-            adsBySlot[pendingSlots.removeFirst()] = ad
+        // The first waiting slot that isn't on screen gets it; else it's kept for the next slot.
+        if let index = pendingSlots.firstIndex(where: { !visibleSlots.contains($0) }) {
+            assign(ad, to: pendingSlots.remove(at: index))
         } else {
             spare.append(ad)
         }
@@ -115,9 +150,17 @@ final class FeedAdStore: NSObject {
 
     private func failed(_ error: Error) {
         failures += 1
-        print("[Ads] Feed ad failed to load: \(error.localizedDescription)")
         loader = nil
-        loadMoreIfNeeded()
+        // Try again after 5 s, 10 s, 20 s… up to 2 minutes (no ad, an ad blocker, offline…).
+        let delay = min(5 * pow(2, Double(failures - 1)), 120)
+        print("[Ads] Feed ad failed to load: \(error.localizedDescription). Retrying in \(Int(delay)) s.")
+        retryTask?.cancel()
+        retryTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard let self, !Task.isCancelled else { return }
+            self.retryTask = nil
+            self.loadMoreIfNeeded()
+        }
     }
 }
 
@@ -156,11 +199,16 @@ struct FeedAdSlot: View {
         }
         // The lazy feed builds rows a little ahead of the screen: ask for an ad then too.
         .onAppear { FeedAdStore.shared.prepare(slot: slot) }
-        // Once its top is on screen, it keeps whatever it has (no late pop-in).
-        .onGeometryChange(for: Bool.self) { proxy in
-            proxy.frame(in: .global).minY < UIScreen.main.bounds.maxY
-        } action: { onScreen in
-            if onScreen { FeedAdStore.shared.slotReachedScreen(slot) }
+        // Where the slot is: an ad only goes in while it's below the screen (no pop-in under
+        // your finger); scrolled past without one, it stays empty.
+        .onGeometryChange(for: FeedAdStore.SlotPosition.self) { proxy in
+            let frame = proxy.frame(in: .global)
+            let screen = UIScreen.main.bounds
+            if frame.minY >= screen.maxY { return .below }
+            if frame.maxY <= screen.minY { return .above }
+            return .onScreen
+        } action: { position in
+            FeedAdStore.shared.slot(slot, movedTo: position)
         }
         #else
         EmptyView()

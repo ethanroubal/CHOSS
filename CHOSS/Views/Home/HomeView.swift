@@ -27,8 +27,8 @@ struct HomeView: View {
                             PostCardView(post: item.post, reason: item.reason)
                                 .onAppear { FeedAds.postAppeared(at: index) }
                             Divider()
-                            // A sponsored post after every few posts (not after the last one).
-                            if (index + 1) % FeedAds.interval == 0, index < feed.count - 1 {
+                            // A sponsored post after every few posts.
+                            if (index + 1) % FeedAds.interval == 0 {
                                 FeedAdSlot(slot: (index + 1) / FeedAds.interval - 1)
                             }
                         }
